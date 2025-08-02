@@ -7,7 +7,7 @@ echo "🎸 Iniciando sistema Guitar-MIDI..."
 # Configurar audio automáticamente
 echo "🔊 Configurando audio..."
 amixer cset numid=2 on > /dev/null 2>&1  # Unmute
-amixer cset numid=1 90% > /dev/null 2>&1 # Volumen 100%
+amixer cset numid=1 100% > /dev/null 2>&1 # Volumen 100%
 
 # Esperar un momento para que el audio se configure
 sleep 2
