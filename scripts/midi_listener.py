@@ -4,9 +4,12 @@ import fluidsynth
 
 class MidiCaptainController:
     def __init__(self):
-        # Inicializa FluidSynth
+        # Inicializa FluidSynth con configuración específica para DietPi
         self.fs = fluidsynth.Synth()
-        self.fs.start(driver="alsa")
+        # Configurar settings específicos
+        self.fs.setting('audio.driver', 'alsa')
+        self.fs.setting('audio.alsa.device', 'hw:0')
+        self.fs.start()
         
         # Carga SoundFont
         self.sfid = self.fs.sfload("/usr/share/sounds/sf2/FluidR3_GM.sf2")
