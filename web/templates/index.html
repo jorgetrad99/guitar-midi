@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block title %}Control - Guitar-MIDI{% endblock %}
+
+{% block content %}
+<div class="control-page">
+    <!-- Current Instrument Display -->
+    <section class="current-instrument-section">
+        <div class="instrument-card">
+            <div class="instrument-header">
+                <h2 class="instrument-title">Instrumento Actual</h2>
+                <div class="instrument-status" id="instrumentStatus">🟢 Activo</div>
+            </div>
+            <div class="instrument-display">
+                <div class="instrument-icon-large" id="currentInstrumentIcon">🎹</div>
+                <div class="instrument-info">
+                    <h3 class="instrument-name-large" id="currentInstrumentName">Piano</h3>
+                    <div class="instrument-details">
+                        <span class="detail-item">PC: <span id="currentPC">0</span></span>
+                        <span class="detail-item">Bank: <span id="currentBank">0</span></span>
+                        <span class="detail-item">Program: <span id="currentProgram">0</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Preset Selection -->
+    <section class="preset-section">
+        <div class="section-header">
+            <h2 class="section-title">Preset Actual</h2>
+            <div class="preset-actions">
+                <button class="btn btn-secondary" id="saveCurrentBtn">💾 Guardar</button>
+            </div>
+        </div>
+        <div class="preset-selector">
+            <select class="preset-select" id="presetSelect">
+                <option value="default">Default</option>
+            </select>
+            <button class="btn btn-primary" id="loadPresetBtn">▶ Cargar</button>
+        </div>
+    </section>
+
+    <!-- Quick Instrument Map -->
+    <section class="quick-map-section">
+        <div class="section-header">
+            <h2 class="section-title">Mapa Rápido de Pedales</h2>
+        </div>
+        <div class="instrument-grid">
+            <div class="instrument-item" data-pc="0">
+                <div class="pc-number">0</div>
+                <div class="instrument-icon">🎹</div>
+                <div class="instrument-name">Piano</div>
+            </div>
+            <div class="instrument-item" data-pc="1">
+                <div class="pc-number">1</div>
+                <div class="instrument-icon">🥁</div>
+                <div class="instrument-name">Drums</div>
+            </div>
+            <div class="instrument-item" data-pc="2">
+                <div class="pc-number">2</div>
+                <div class="instrument-icon">🎸</div>
+                <div class="instrument-name">Bass</div>
+            </div>
+            <div class="instrument-item" data-pc="3">
+                <div class="pc-number">3</div>
+                <div class="instrument-icon">🎸</div>
+                <div class="instrument-name">Guitar</div>
+            </div>
+            <div class="instrument-item" data-pc="4">
+                <div class="pc-number">4</div>
+                <div class="instrument-icon">🎷</div>
+                <div class="instrument-name">Saxophone</div>
+            </div>
+            <div class="instrument-item" data-pc="5">
+                <div class="pc-number">5</div>
+                <div class="instrument-icon">🎻</div>
+                <div class="instrument-name">Strings</div>
+            </div>
+            <div class="instrument-item" data-pc="6">
+                <div class="pc-number">6</div>
+                <div class="instrument-icon">🎹</div>
+                <div class="instrument-name">Organ</div>
+            </div>
+            <div class="instrument-item" data-pc="7">
+                <div class="pc-number">7</div>
+                <div class="instrument-icon">🪈</div>
+                <div class="instrument-name">Flute</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Global Controls -->
+    <section class="controls-section">
+        <div class="section-header">
+            <h2 class="section-title">Controles Globales</h2>
+        </div>
+        
+        <div class="control-group">
+            <div class="control-item">
+                <label class="control-label">
+                    <span class="control-icon">🔊</span>
+                    <span class="control-name">Volumen Master</span>
+                    <span class="control-value" id="masterVolumeValue">80%</span>
+                </label>
+                <input type="range" class="control-slider" id="masterVolumeSlider" 
+                       min="0" max="100" value="80" data-effect="master_volume">
+            </div>
+
+            <div class="control-item">
+                <label class="control-label">
+                    <span class="control-icon">🌊</span>
+                    <span class="control-name">Reverb Global</span>
+                    <span class="control-value" id="globalReverbValue">50%</span>
+                </label>
+                <input type="range" class="control-slider" id="globalReverbSlider" 
+                       min="0" max="100" value="50" data-effect="global_reverb">
+            </div>
+
+            <div class="control-item">
+                <label class="control-label">
+                    <span class="control-icon">🎵</span>
+                    <span class="control-name">Chorus Global</span>
+                    <span class="control-value" id="globalChorusValue">30%</span>
+                </label>
+                <input type="range" class="control-slider" id="globalChorusSlider" 
+                       min="0" max="100" value="30" data-effect="global_chorus">
+            </div>
+        </div>
+    </section>
+
+    <!-- MIDI Activity -->
+    <section class="activity-section">
+        <div class="section-header">
+            <h2 class="section-title">Actividad MIDI</h2>
+            <div class="activity-indicator" id="activityIndicator">
+                <span class="activity-dot"></span>
+                <span class="activity-text">En espera...</span>
+            </div>
+        </div>
+        <div class="activity-log" id="activityLog">
+            <div class="activity-item">
+                <span class="activity-time">--:--:--</span>
+                <span class="activity-message">Sistema iniciado</span>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Inicialización específica de la página de control
+document.addEventListener('DOMContentLoaded', function() {
+    // Cargar presets disponibles
+    loadAvailablePresets();
+    
+    // Event listeners para controles
+    initializeControlListeners();
+    
+    // Actualizar display inicial
+    updateInstrumentDisplay();
+});
+
+function loadAvailablePresets() {
+    fetch('/api/presets')
+        .then(response => response.json())
+        .then(presets => {
+            const select = document.getElementById('presetSelect');
+            select.innerHTML = '';
+            
+            Object.keys(presets).forEach(presetName => {
+                const option = document.createElement('option');
+                option.value = presetName;
+                option.textContent = presetName;
+                select.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Error loading presets:', error));
+}
+
+function initializeControlListeners() {
+    // Sliders de efectos
+    document.querySelectorAll('.control-slider').forEach(slider => {
+        slider.addEventListener('input', function() {
+            const effect = this.dataset.effect;
+            const value = parseInt(this.value);
+            const valueDisplay = document.getElementById(effect.replace('_', '') + 'Value');
+            
+            if (valueDisplay) {
+                valueDisplay.textContent = value + '%';
+            }
+            
+            // Enviar cambio al servidor
+            updateEffect(effect, value);
+        });
+    });
+    
+    // Cargar preset
+    document.getElementById('loadPresetBtn').addEventListener('click', function() {
+        const presetName = document.getElementById('presetSelect').value;
+        loadPreset(presetName);
+    });
+    
+    // Guardar preset actual
+    document.getElementById('saveCurrentBtn').addEventListener('click', function() {
+        const presetName = prompt('Nombre del preset:', 'Mi Preset');
+        if (presetName) {
+            saveCurrentAsPreset(presetName);
+        }
+    });
+    
+    // Items del mapa de instrumentos
+    document.querySelectorAll('.instrument-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const pc = parseInt(this.dataset.pc);
+            selectInstrument(pc);
+        });
+    });
+}
+
+function updateEffect(effect, value) {
+    const data = {};
+    data[effect] = value;
+    
+    fetch('/api/effects', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showToast(`${effect} actualizado a ${value}%`, 'success');
+        } else {
+            showToast('Error al actualizar efecto', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating effect:', error);
+        showToast('Error de conexión', 'error');
+    });
+}
+
+function loadPreset(presetName) {
+    showLoading(true);
+    
+    fetch(`/api/presets/${presetName}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(result => {
+        showLoading(false);
+        
+        if (result.success) {
+            showToast(`Preset "${presetName}" cargado`, 'success');
+            updateInstrumentDisplay();
+        } else {
+            showToast('Error al cargar preset', 'error');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        console.error('Error loading preset:', error);
+        showToast('Error de conexión', 'error');
+    });
+}
+
+function saveCurrentAsPreset(presetName) {
+    showLoading(true);
+    
+    fetch(`/api/presets/${presetName}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(window.appState || {})
+    })
+    .then(response => response.json())
+    .then(result => {
+        showLoading(false);
+        
+        if (result.success) {
+            showToast(`Preset "${presetName}" guardado`, 'success');
+            loadAvailablePresets(); // Recargar lista
+        } else {
+            showToast('Error al guardar preset', 'error');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        console.error('Error saving preset:', error);
+        showToast('Error de conexión', 'error');
+    });
+}
+
+function selectInstrument(pc) {
+    // Highlight del instrumento seleccionado
+    document.querySelectorAll('.instrument-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    const selectedItem = document.querySelector(`[data-pc="${pc}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('active');
+    }
+    
+    // Actualizar display
+    if (window.appState && window.appState.instruments && window.appState.instruments[pc]) {
+        const instrument = window.appState.instruments[pc];
+        updateCurrentInstrumentDisplay(pc, instrument);
+    }
+}
+
+function updateInstrumentDisplay() {
+    fetch('/api/instruments')
+        .then(response => response.json())
+        .then(instruments => {
+            // Actualizar mapa de instrumentos
+            Object.keys(instruments).forEach(pc => {
+                const item = document.querySelector(`[data-pc="${pc}"]`);
+                if (item) {
+                    const nameElement = item.querySelector('.instrument-name');
+                    if (nameElement) {
+                        nameElement.textContent = instruments[pc].name;
+                    }
+                }
+            });
+        })
+        .catch(error => console.error('Error updating instruments:', error));
+}
+
+function updateCurrentInstrumentDisplay(pc, instrument) {
+    document.getElementById('currentInstrumentName').textContent = instrument.name;
+    document.getElementById('currentPC').textContent = pc;
+    document.getElementById('currentBank').textContent = instrument.bank;
+    document.getElementById('currentProgram').textContent = instrument.program;
+}
+</script>
+{% endblock %}

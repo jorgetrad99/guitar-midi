@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a1a">
+    
+    <title>{% block title %}Guitar-MIDI Control{% endblock %}</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- Icons -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/icon-32.png') }}">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+    
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="logo">🎸 Guitar-MIDI</h1>
+            <div class="status-indicator" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Conectando...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav-tabs">
+        <a href="{{ url_for('index') }}" class="nav-tab {% if request.endpoint == 'index' %}active{% endif %}">
+            <span class="nav-icon">🎹</span>
+            <span class="nav-label">Control</span>
+        </a>
+        <a href="{{ url_for('instruments') }}" class="nav-tab {% if request.endpoint == 'instruments' %}active{% endif %}">
+            <span class="nav-icon">🎛️</span>
+            <span class="nav-label">Instrumentos</span>
+        </a>
+        <a href="{{ url_for('presets') }}" class="nav-tab {% if request.endpoint == 'presets' %}active{% endif %}">
+            <span class="nav-icon">💾</span>
+            <span class="nav-label">Presets</span>
+        </a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="current-instrument" id="currentInstrument">
+                <span class="instrument-icon">🎹</span>
+                <span class="instrument-name">Piano</span>
+                <span class="instrument-pc">PC: 0</span>
+            </div>
+            <div class="footer-actions">
+                <button class="panic-btn" id="panicBtn">
+                    <span class="btn-icon">🔴</span>
+                    <span class="btn-text">PANIC</span>
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Cargando...</div>
+    </div>
+
+    <!-- Toast Messages -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/websocket.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
