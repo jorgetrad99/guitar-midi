@@ -4,13 +4,18 @@
 
 echo "🎸 Iniciando sistema Guitar-MIDI..."
 
+# Esperar a que el sistema termine de cargar completamente
+echo "⏳ Esperando estabilización del sistema..."
+sleep 10
+
 # Configurar audio automáticamente
 echo "🔊 Configurando audio..."
 amixer cset numid=2 on > /dev/null 2>&1  # Unmute
 amixer cset numid=1 100% > /dev/null 2>&1 # Volumen 100%
 
-# Esperar un momento para que el audio se configure
-sleep 2
+# Esperar a que los dispositivos USB se detecten
+echo "🔌 Esperando dispositivos USB MIDI..."
+sleep 5
 
 # Ir al directorio del proyecto
 cd /root/guitar-midi
