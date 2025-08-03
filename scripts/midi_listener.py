@@ -9,7 +9,7 @@ class MidiCaptainController:
         # Configurar settings específicos
         self.fs.setting('audio.driver', 'alsa')
         self.fs.setting('audio.alsa.device', 'hw:0')
-        self.fs.setting('synth.gain', 2.0)  # Amplificar 2x el volumen
+        self.fs.setting('synth.gain', 1.5)  # Amplificar 1.5x el volumen
         self.fs.start()
         
         # Carga SoundFont
