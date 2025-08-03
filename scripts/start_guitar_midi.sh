@@ -4,18 +4,18 @@
 
 echo "🎸 Iniciando sistema Guitar-MIDI..."
 
-# Esperar a que el sistema termine de cargar completamente
+# Esperar a que el sistema termine de cargar
 echo "⏳ Esperando estabilización del sistema..."
-sleep 10
+sleep 5
 
 # Configurar audio automáticamente
 echo "🔊 Configurando audio..."
 amixer cset numid=2 on > /dev/null 2>&1  # Unmute
 amixer cset numid=1 100% > /dev/null 2>&1 # Volumen 100%
 
-# Esperar a que los dispositivos USB se detecten
+# Esperar dispositivos USB (reducido)
 echo "🔌 Esperando dispositivos USB MIDI..."
-sleep 5
+sleep 3
 
 # Ir al directorio del proyecto
 cd /root/guitar-midi
@@ -28,10 +28,5 @@ echo "🎹 Iniciando sistema MIDI..."
 echo "✅ Sistema listo para tocar en vivo!"
 echo ""
 
-# Configurar prioridades para tiempo real
-echo "⚡ Configurando prioridades de tiempo real..."
-ulimit -r 99
-ulimit -l unlimited
-
-# Ejecutar el script principal con prioridad alta
-nice -n -10 python scripts/midi_listener.py
+# Ejecutar el script principal
+python scripts/midi_listener.py
