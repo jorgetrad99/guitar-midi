@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Debug API - Guitar-MIDI</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #0a0a0a; 
+            color: #fff; 
+            padding: 20px; 
+        }
+        .debug-section { 
+            background: #1a1a1a; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 10px; 
+        }
+        button { 
+            padding: 10px 20px; 
+            margin: 5px; 
+            border: none; 
+            border-radius: 5px; 
+            background: #4CAF50; 
+            color: white; 
+            cursor: pointer; 
+        }
+        button:hover { background: #45a049; }
+        input[type="range"] { 
+            width: 200px; 
+            margin: 0 10px; 
+        }
+        .log { 
+            background: #000; 
+            padding: 10px; 
+            border-radius: 5px; 
+            font-family: monospace; 
+            height: 200px; 
+            overflow-y: auto; 
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Debug API - Guitar-MIDI Complete</h1>
+    
+    <div class="debug-section">
+        <h2>📊 Sistema</h2>
+        <button onclick="testSystemStatus()">Test System Status</button>
+        <button onclick="testPanic()">Test PANIC</button>
+    </div>
+    
+    <div class="debug-section">
+        <h2>🎹 Instrumentos</h2>
+        <button onclick="testInstrument(0)">Preset 0</button>
+        <button onclick="testInstrument(1)">Preset 1</button>
+        <button onclick="testInstrument(2)">Preset 2</button>
+        <button onclick="testInstrument(3)">Preset 3</button>
+    </div>
+    
+    <div class="debug-section">
+        <h2>🎛️ Efectos</h2>
+        <div>
+            Volume: <input type="range" id="volume" min="0" max="100" value="80" 
+                          onchange="testEffect('master_volume', this.value)"> 
+            <span id="volumeValue">80</span>%
+        </div>
+        <div>
+            Reverb: <input type="range" id="reverb" min="0" max="100" value="50" 
+                          onchange="testEffect('global_reverb', this.value)"> 
+            <span id="reverbValue">50</span>%
+        </div>
+        <div>
+            Chorus: <input type="range" id="chorus" min="0" max="100" value="30" 
+                          onchange="testEffect('global_chorus', this.value)"> 
+            <span id="chorusValue">30</span>%
+        </div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>📋 Log de Respuestas</h2>
+        <button onclick="clearLog()">Limpiar Log</button>
+        <div id="log" class="log"></div>
+    </div>
+    
+    <script>
+        function log(message) {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${timestamp}] ${message}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function testSystemStatus() {
+            log('🔌 Probando /api/system/status...');
+            try {
+                const response = await fetch('/api/system/status');
+                const data = await response.json();
+                log(`✅ Status: ${response.status} - ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testPanic() {
+            log('🚨 Probando PANIC...');
+            try {
+                const response = await fetch('/api/system/panic', { method: 'POST' });
+                const data = await response.json();
+                log(`✅ PANIC: ${response.status} - ${JSON.stringify(data)}`);
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testInstrument(pc) {
+            log(`🎹 Probando instrumento ${pc}...`);
+            try {
+                const response = await fetch(`/api/instruments/${pc}/activate`, { method: 'POST' });
+                const data = await response.json();
+                log(`✅ Instrumento ${pc}: ${response.status} - ${JSON.stringify(data)}`);
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        async function testEffect(effectName, value) {
+            document.getElementById(effectName.replace('_', '').replace('global', '') + 'Value').textContent = value;
+            log(`🎛️ Probando efecto ${effectName} = ${value}%...`);
+            try {
+                const data = {};
+                data[effectName] = parseInt(value);
+                
+                const response = await fetch('/api/effects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                log(`✅ Efecto ${effectName}: ${response.status} - ${JSON.stringify(result)}`);
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        // Log inicial
+        log('🎸 Debug API iniciado - Usa los controles para probar');
+    </script>
+</body>
+</html>

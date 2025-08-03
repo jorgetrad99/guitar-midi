@@ -800,18 +800,31 @@ ctl.!default {
     
     def _set_effect(self, effect_name: str, value: int) -> bool:
         """Aplicar efecto global"""
+        print(f"🎛️ _set_effect llamado: {effect_name} = {value}")
         try:
-            if self.fs:
+            if not self.fs:
+                print("   ❌ FluidSynth no inicializado")
+                return False
+                
+            print(f"   🔧 Aplicando {effect_name}...")
+            if True:  # Cambié self.fs por True para simplificar debug
                 if effect_name == 'master_volume':
                     # Volumen master
                     gain = (value / 100.0) * 2.0
-                    self.fs.setting('synth.gain', gain)
+                    print(f"      Configurando ganancia: {gain}")
+                    result = self._safe_setting('synth.gain', gain)
+                    print(f"      Resultado ganancia: {'✅' if result else '❌'}")
                     
                 elif effect_name == 'global_reverb':
                     # Reverb global en todos los canales
                     reverb_value = int((value / 100.0) * 127)
+                    print(f"      Configurando reverb: {reverb_value} en 16 canales")
                     for channel in range(16):
-                        self.fs.cc(channel, 91, reverb_value)  # CC 91 = Reverb
+                        try:
+                            self.fs.cc(channel, 91, reverb_value)  # CC 91 = Reverb
+                        except Exception as e:
+                            print(f"      ❌ Error CC reverb canal {channel}: {e}")
+                    print(f"      ✅ Reverb aplicado")
                     
                 elif effect_name == 'global_chorus':
                     # Chorus global en todos los canales
@@ -840,11 +853,11 @@ ctl.!default {
                              (effect_name, str(value)))
                 conn.commit()
             
-            print(f"🎹 {effect_name}: {value}%")
+            print(f"🎹 {effect_name}: {value}% - ✅ COMPLETADO")
             return True
             
         except Exception as e:
-            print(f"❌ Error aplicando efecto: {e}")
+            print(f"❌ Error aplicando efecto {effect_name}: {e}")
             return False
     
     def _panic(self) -> bool:
@@ -1048,6 +1061,11 @@ ctl.!default {
         @self.app.route('/')
         def index():
             return render_template('index.html')
+        
+        # Debug route for testing API
+        @self.app.route('/debug')
+        def debug():
+            return render_template('debug.html')
         
         # WebSocket Events
         @self.socketio.on('connect')

@@ -70,11 +70,16 @@ class GuitarMIDIApp {
 
     async loadSystemData() {
         try {
+            console.log('🔌 JS: Cargando datos del sistema...');
             this.setLoading(true);
             
             // Load system status (includes presets and effects)
+            console.log('📡 JS: Enviando petición a /api/system/status');
             const response = await fetch('/api/system/status');
+            console.log('📥 JS: Respuesta status del sistema:', response.status);
+            
             const data = await response.json();
+            console.log('📋 JS: Datos del sistema:', data);
             
             if (data.success) {
                 this.presets = data.presets || {};
@@ -150,17 +155,22 @@ class GuitarMIDIApp {
 
         const preset = this.presets[pc];
         if (!preset) {
+            console.log(`❌ JS: Preset ${pc} no configurado`);
             this.showStatus('❌ Preset no configurado', 'error');
             return;
         }
 
         try {
+            console.log(`🎹 JS: Activando preset ${pc} (${preset.name})`);
             this.setLoading(true);
 
             const response = await fetch(`/api/instruments/${pc}/activate`, {
                 method: 'POST'
             });
+            
+            console.log('📥 JS: Respuesta cambio instrumento, status:', response.status);
             const data = await response.json();
+            console.log('📋 JS: Resultado cambio instrumento:', data);
 
             if (data.success) {
                 this.currentInstrument = pc;
@@ -171,7 +181,7 @@ class GuitarMIDIApp {
                 this.showStatus('❌ Error activando preset', 'error');
             }
         } catch (error) {
-            console.error('Error changing instrument:', error);
+            console.error('❌ JS: Error changing instrument:', error);
             this.showStatus('❌ Error de conexión', 'error');
         } finally {
             this.setLoading(false);
@@ -201,19 +211,26 @@ class GuitarMIDIApp {
         if (this.isLoading) return;
 
         try {
+            console.log(`🎛️ JS: Enviando efecto ${effectName} = ${value}%`);
+            
             // Update UI immediately for responsiveness
             this.updateEffectDisplay(effectName, value);
 
             const data = {};
             data[effectName] = value;
 
+            console.log('📡 JS: Datos a enviar:', data);
+            
             const response = await fetch('/api/effects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
 
+            console.log('📥 JS: Respuesta recibida, status:', response.status);
+            
             const result = await response.json();
+            console.log('📋 JS: Resultado:', result);
             
             if (result.success) {
                 this.effects[effectName] = value;
@@ -224,7 +241,7 @@ class GuitarMIDIApp {
                 this.showStatus('❌ Error aplicando efecto', 'error');
             }
         } catch (error) {
-            console.error('Error updating effect:', error);
+            console.error('❌ JS: Error updating effect:', error);
             // Revert UI change
             this.updateEffectDisplay(effectName, this.effects[effectName] || 0);
             this.showStatus('❌ Error de conexión', 'error');
