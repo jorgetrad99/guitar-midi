@@ -414,36 +414,19 @@ ctl.!default {
                     self.fs.setting('audio.driver', driver)
                     
                     if driver == 'alsa':
-                        # Configuración ALSA específica para Raspberry Pi
+                        # Configuración ALSA simplificada para máxima compatibilidad
                         device = self.audio_device or 'hw:0,0'
                         print(f"      Dispositivo ALSA: {device}")
                         
-                        # Configurar parámetros de manera segura
+                        # Solo configurar lo esencial que funciona en todas las versiones
                         self._safe_setting('audio.alsa.device', device)
-                        self._safe_setting('audio.period-size', 1024)
-                        self._safe_setting('audio.periods', 2)
-                        
-                        # Probar diferentes nombres para sample rate
-                        if not self._safe_setting('audio.sample-rate', 44100):
-                            if not self._safe_setting('synth.sample-rate', 44100):
-                                self._safe_setting('audio.rate', 44100)
-                        
-                        # Configuraciones adicionales
-                        self._safe_setting('synth.audio-channels', 2)
-                        self._safe_setting('synth.audio-groups', 1)
                     elif driver == 'pulse':
                         # PulseAudio settings
                         self.fs.setting('audio.pulseaudio.server', 'default')
                         self.fs.setting('audio.pulseaudio.device', 'default')
                     
-                    # Configuraciones generales optimizadas (usando método seguro)
-                    self._safe_setting('synth.gain', 1.5)              # Ganancia más alta
-                    self._safe_setting('synth.polyphony', 64)           # Polifonía
-                    self._safe_setting('synth.reverb.active', 1)        # Reverb activo (1=True)
-                    self._safe_setting('synth.chorus.active', 1)        # Chorus activo (1=True)
-                    
-                    # Configuraciones adicionales para mejor rendimiento
-                    self._safe_setting('synth.cpu-cores', 1)           # Un core para estabilidad
+                    # Solo configuraciones básicas compatibles con todas las versiones
+                    self._safe_setting('synth.gain', 1.0)              # Ganancia estándar
                     
                     # Intentar iniciar
                     result = self.fs.start(driver=driver)
@@ -459,36 +442,33 @@ ctl.!default {
                     continue
             
             if not audio_started:
-                print("   ⚠️  Intentando configuración básica...")
+                print("   ⚠️  Intentando configuración ultra-básica...")
                 try:
-                    # Reinicializar con configuración mínima
+                    # Reinicializar con configuración por defecto
                     self.fs = fluidsynth.Synth()
                     
-                    # Configuración básica sin parámetros complejos
-                    self.fs.setting('audio.driver', 'alsa')
-                    device = self.audio_device or 'hw:0,0'
-                    self._safe_setting('audio.alsa.device', device)
-                    self._safe_setting('synth.gain', 1.0)
+                    # NO configurar nada, usar valores por defecto de FluidSynth
+                    print("      Usando configuración por defecto de FluidSynth")
                     
+                    # Intentar iniciar sin especificar driver (usa el por defecto)
                     result = self.fs.start()
                     if result == 0:
-                        print("   ✅ FluidSynth iniciado en modo básico")
+                        print("   ✅ FluidSynth iniciado con configuración por defecto")
                         audio_started = True
                     else:
-                        # Último intento: modo file (sin audio real)
-                        print("   ⚠️  Intentando modo MIDI-only...")
+                        # Último intento: especificar solo el driver ALSA
+                        print("   ⚠️  Intentando solo con driver ALSA...")
                         self.fs = fluidsynth.Synth()
-                        self.fs.setting('audio.driver', 'file')
-                        self._safe_setting('audio.file.name', '/dev/null')
-                        result = self.fs.start()
+                        self.fs.setting('audio.driver', 'alsa')
+                        result = self.fs.start(driver='alsa')
                         if result == 0:
-                            print("   ✅ FluidSynth iniciado en modo MIDI-only")
+                            print("   ✅ FluidSynth iniciado solo con ALSA")
                             audio_started = True
                         else:
-                            raise Exception("No se pudo iniciar FluidSynth en ningún modo")
+                            raise Exception("No se pudo iniciar FluidSynth")
                             
                 except Exception as e:
-                    print(f"   ❌ Error en configuración básica: {e}")
+                    print(f"   ❌ Error en configuración ultra-básica: {e}")
                     return False
             
             # Cargar SoundFont
@@ -502,6 +482,9 @@ ctl.!default {
             
             # Configurar instrumento inicial
             self._set_instrument(0)
+            
+            # Ajustar volumen del sistema después de iniciar FluidSynth
+            self._boost_system_audio()
             
             # Test de audio para verificar que funciona
             self._test_audio_output()
@@ -532,6 +515,41 @@ ctl.!default {
         except Exception as e:
             print(f"      ❌ Error configurando {param}: {e}")
             return False
+    
+    def _boost_system_audio(self):
+        """Aumentar volumen del sistema para asegurar que se escuche"""
+        try:
+            print("   🔊 Ajustando volumen del sistema...")
+            
+            # Comandos para aumentar volumen
+            volume_commands = [
+                ['amixer', '-q', 'sset', 'Master', '100%', 'unmute'],
+                ['amixer', '-q', 'sset', 'PCM', '100%', 'unmute'],
+                ['amixer', '-q', 'sset', 'Headphone', '95%', 'unmute'],
+                ['amixer', '-q', 'sset', 'Speaker', '95%', 'unmute'],
+                ['amixer', '-q', 'sset', 'Capture', '90%'],
+            ]
+            
+            for cmd in volume_commands:
+                try:
+                    subprocess.run(cmd, capture_output=True, timeout=2)
+                except:
+                    pass  # Ignorar errores individuales
+            
+            # También aumentar ganancia de FluidSynth si es posible
+            if self.fs:
+                try:
+                    # Usar método más directo para ganancia
+                    if hasattr(self.fs, 'set_gain'):
+                        self.fs.set_gain(1.2)
+                        print("      ✅ Ganancia FluidSynth aumentada")
+                except:
+                    pass
+            
+            print("   ✅ Volumen del sistema ajustado")
+            
+        except Exception as e:
+            print(f"   ⚠️  Error ajustando volumen: {e}")
     
     def _test_audio_output(self):
         """Test rápido de salida de audio"""
