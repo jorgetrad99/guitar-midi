@@ -1,9 +1,14 @@
-numpy==2.3.2
-pyfluidsynth==1.3.4
-pygame==2.6.1
+# Guitar-MIDI Complete System - Dependencias Mínimas
+# Sistema unificado en UN SOLO archivo
+
+# MIDI y Audio
 python-rtmidi==1.5.8
-Flask==2.3.3
+pyfluidsynth==1.3.3
+
+# Web Server
+Flask==3.0.0
 Flask-SocketIO==5.3.6
-python-socketio==5.9.0
 eventlet==0.33.3
-psutil==5.9.0
+
+# Solo estas 5 dependencias son necesarias
+# Todo lo demás está integrado en guitar_midi_complete.py

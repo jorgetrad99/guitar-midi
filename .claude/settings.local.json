@@ -6,7 +6,10 @@
       "Bash(where python)",
       "Bash(C:UsersjemtlAppDataLocalProgramsPythonPython312python.exe --version)",
       "Bash(cmd /c:*)",
-      "Bash(pyenv:*)"
+      "Bash(pyenv:*)",
+      "Bash(dir)",
+      "Bash(del:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
