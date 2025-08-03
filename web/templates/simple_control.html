@@ -249,7 +249,7 @@
 <body>
     <header class="header">
         <h1 class="title">🎸 Guitar-MIDI</h1>
-        <div class="status">✅ Conectado</div>
+        <div class="status" id="connectionStatus">🔄 Conectando...</div>
     </header>
 
     <main class="main">
@@ -456,6 +456,61 @@
                     break;
             }
         });
+
+        // Verificar estado del sistema
+        function checkSystemStatus() {
+            fetch('/api/system/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusElement = document.getElementById('connectionStatus');
+                    
+                    if (data.success && data.status.engine_connected) {
+                        statusElement.textContent = '✅ Sistema Conectado';
+                        statusElement.style.background = '#4CAF50';
+                        
+                        // Actualizar instrumento actual si es diferente
+                        const currentPC = data.status.current_instrument;
+                        if (currentPC !== currentInstrument) {
+                            updateCurrentDisplay(currentPC);
+                        }
+                    } else {
+                        statusElement.textContent = '❌ MIDI Engine Desconectado';
+                        statusElement.style.background = '#f44336';
+                    }
+                })
+                .catch(error => {
+                    const statusElement = document.getElementById('connectionStatus');
+                    statusElement.textContent = '⚠️ Error de Conexión';
+                    statusElement.style.background = '#ff9800';
+                });
+        }
+        
+        function updateCurrentDisplay(pc) {
+            const instruments = ['🎹', '🥁', '🎸', '🎸', '🎷', '🎻', '🎹', '🪈'];
+            const names = ['Piano', 'Drums', 'Bass', 'Guitar', 'Saxophone', 'Strings', 'Organ', 'Flute'];
+            
+            document.getElementById('currentIcon').textContent = instruments[pc];
+            document.getElementById('currentName').textContent = names[pc];
+            document.getElementById('currentPC').textContent = pc;
+            
+            // Actualizar botón activo
+            document.querySelectorAll('.instrument-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            const activeBtn = document.querySelector(`[onclick*="changeInstrument(${pc},"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+            
+            currentInstrument = pc;
+        }
+        
+        // Verificar estado cada 5 segundos
+        setInterval(checkSystemStatus, 5000);
+        
+        // Verificar estado inicial
+        setTimeout(checkSystemStatus, 1000);
 
         console.log('🎸 Guitar-MIDI Control Simplificado');
         console.log('⌨️ Atajos: P=PANIC, 0-7=Instrumentos');

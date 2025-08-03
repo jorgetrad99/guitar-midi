@@ -106,33 +106,19 @@ def update_instrument(pc_number):
 @app.route('/api/instruments/<int:pc_number>/activate', methods=['POST'])
 def activate_instrument(pc_number):
     """Activar un instrumento específico (para interfaz simple)"""
-    if 0 <= pc_number <= 7:
-        # Cambiar instrumento actual
+    result = midi_api.activate_instrument(pc_number)
+    
+    if result['success']:
+        # Actualizar estado local
         app_state['current_instrument'] = pc_number
         
-        # Si hay configuración para este PC, aplicarla
-        if pc_number in app_state['instruments']:
-            instrument_data = app_state['instruments'][pc_number]
-            result = midi_api.change_instrument(pc_number, instrument_data)
-        else:
-            # Usar configuración por defecto
-            instruments_default = {
-                0: {'name': 'Piano', 'bank': 0, 'program': 0, 'channel': 0},
-                1: {'name': 'Drums', 'bank': 0, 'program': 0, 'channel': 9},
-                2: {'name': 'Bass', 'bank': 0, 'program': 32, 'channel': 1},
-                3: {'name': 'Guitar', 'bank': 0, 'program': 24, 'channel': 2},
-                4: {'name': 'Saxophone', 'bank': 0, 'program': 64, 'channel': 3},
-                5: {'name': 'Strings', 'bank': 0, 'program': 48, 'channel': 4},
-                6: {'name': 'Organ', 'bank': 0, 'program': 16, 'channel': 5},
-                7: {'name': 'Flute', 'bank': 0, 'program': 73, 'channel': 6}
-            }
-            instrument_data = instruments_default[pc_number]
-            app_state['instruments'][pc_number] = instrument_data
-            result = midi_api.change_instrument(pc_number, instrument_data)
+        # Obtener estado actual del engine
+        current_state = midi_api.get_current_state()
+        app_state.update(current_state)
         
-        return jsonify({'success': True, 'instrument': instrument_data, 'result': result})
-    
-    return jsonify({'error': 'PC number must be 0-7'}), 400
+        return jsonify(result)
+    else:
+        return jsonify(result), 400
 
 @app.route('/api/presets', methods=['GET'])
 def get_presets():
@@ -167,29 +153,69 @@ def update_effects():
     """Actualizar efectos globales"""
     data = request.get_json()
     
+    results = []
     for effect, value in data.items():
-        if effect in app_state['effects']:
+        # Enviar al MIDI Engine
+        result = midi_api.set_effect(effect, value)
+        results.append(result)
+        
+        if result['success']:
             app_state['effects'][effect] = value
-            
-            # Aplicar al sistema MIDI
-            midi_api.set_effect(effect, value)
     
-    # Notificar cambio de efectos
-    socketio.emit('effects_changed', app_state['effects'])
+    # Notificar cambio de efectos si hay WebSocket
+    try:
+        socketio.emit('effects_changed', app_state['effects'])
+    except:
+        pass
     
-    return jsonify({'success': True})
+    # Retornar éxito si al menos un efecto se aplicó correctamente
+    success = any(r['success'] for r in results)
+    return jsonify({'success': success, 'results': results})
 
 @app.route('/api/system/info', methods=['GET'])
 def get_system_info():
     """Obtener información del sistema"""
     return jsonify(system_api.get_info())
 
+@app.route('/api/system/status', methods=['GET'])
+def get_system_status():
+    """Obtener estado del sistema integrado"""
+    try:
+        # Verificar conexión con MIDI Engine
+        engine_running = midi_api.is_engine_running()
+        
+        # Obtener estado actual
+        current_state = midi_api.get_current_state()
+        
+        status = {
+            'engine_connected': engine_running,
+            'current_instrument': current_state.get('current_instrument', 0),
+            'instruments_configured': len(current_state.get('instruments', {})),
+            'effects': current_state.get('effects', {}),
+            'timestamp': time.time()
+        }
+        
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/system/panic', methods=['POST'])
 def panic_all_notes():
     """Detener todas las notas MIDI (PANIC)"""
     result = midi_api.panic()
     
-    socketio.emit('panic_triggered', {'timestamp': time.time()})
+    # Notificar via WebSocket si está disponible
+    try:
+        socketio.emit('panic_triggered', {'timestamp': time.time()})
+    except:
+        pass
     
     return jsonify(result)
 

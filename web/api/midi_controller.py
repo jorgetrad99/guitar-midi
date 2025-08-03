@@ -1,6 +1,7 @@
 """
 MIDI Controller API
 Interfaz para controlar el sistema MIDI desde la web
+CON COMUNICACIÓN REAL al MIDI Engine
 """
 
 import json
@@ -10,41 +11,116 @@ from typing import Dict, List, Any
 
 class MIDIControllerAPI:
     def __init__(self):
-        self.current_config = {
+        # Archivos de comunicación con MIDI Engine
+        self.state_file = '/tmp/guitar_midi_state.json'
+        self.command_file = '/tmp/guitar_midi_commands.json'
+        
+        # Configuración por defecto
+        self.default_config = {
             'instruments': {
-                0: {"name": "Piano", "program": 0, "bank": 0, "volume": 80, "reverb": 50, "chorus": 30},
-                1: {"name": "Drums", "program": 0, "bank": 128, "volume": 80, "reverb": 20, "chorus": 10},
-                2: {"name": "Bass", "program": 32, "bank": 0, "volume": 85, "reverb": 30, "chorus": 20},
-                3: {"name": "Guitar", "program": 24, "bank": 0, "volume": 75, "reverb": 60, "chorus": 40},
-                4: {"name": "Saxophone", "program": 64, "bank": 0, "volume": 70, "reverb": 70, "chorus": 30},
-                5: {"name": "Strings", "program": 48, "bank": 0, "volume": 65, "reverb": 80, "chorus": 50},
-                6: {"name": "Organ", "program": 16, "bank": 0, "volume": 75, "reverb": 40, "chorus": 60},
-                7: {"name": "Flute", "program": 73, "bank": 0, "volume": 70, "reverb": 70, "chorus": 20}
+                0: {"name": "Piano", "program": 0, "bank": 0, "channel": 0},
+                1: {"name": "Drums", "program": 0, "bank": 128, "channel": 9},
+                2: {"name": "Bass", "program": 32, "bank": 0, "channel": 1},
+                3: {"name": "Guitar", "program": 24, "bank": 0, "channel": 2},
+                4: {"name": "Saxophone", "program": 64, "bank": 0, "channel": 3},
+                5: {"name": "Strings", "program": 48, "bank": 0, "channel": 4},
+                6: {"name": "Organ", "program": 16, "bank": 0, "channel": 5},
+                7: {"name": "Flute", "program": 73, "bank": 0, "channel": 6}
+            },
+            'effects': {
+                'master_volume': 80,
+                'global_reverb': 50,
+                'global_chorus': 30
             }
         }
+        
         self.midi_activity = []
         
         # Lista completa de instrumentos General MIDI
         self.gm_instruments = self._load_gm_instruments()
     
+    def get_current_state(self) -> Dict[str, Any]:
+        """Obtener estado actual desde MIDI Engine"""
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                return state
+            else:
+                return self.default_config
+        except Exception as e:
+            print(f"Error leyendo estado: {e}")
+            return self.default_config
+    
     def get_default_instruments(self) -> Dict[int, Dict]:
-        """Obtener configuración por defecto de instrumentos"""
-        return self.current_config['instruments']
+        """Obtener configuración actual de instrumentos"""
+        state = self.get_current_state()
+        return state.get('instruments', self.default_config['instruments'])
     
     def change_instrument(self, pc_number: int, config: Dict) -> Dict:
         """Cambiar configuración de un instrumento específico"""
         try:
             if 0 <= pc_number <= 7:
-                self.current_config['instruments'][pc_number] = config
-                
-                # TODO: Aquí se conectaría con el sistema MIDI real
-                # Por ahora simulamos el cambio
-                self._log_activity(f"Changed PC {pc_number} to {config['name']}")
-                
-                return {
-                    'success': True,
-                    'message': f"Instrument PC {pc_number} changed to {config['name']}"
+                # Enviar comando al MIDI Engine
+                command = {
+                    'type': 'update_instrument_config',
+                    'pc': pc_number,
+                    'config': config,
+                    'timestamp': time.time()
                 }
+                
+                success = self._send_command(command)
+                
+                if success:
+                    self._log_activity(f"Changed PC {pc_number} to {config['name']}")
+                    return {
+                        'success': True,
+                        'message': f"Instrument PC {pc_number} changed to {config['name']}"
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'message': 'Error comunicando con MIDI Engine'
+                    }
+            else:
+                return {
+                    'success': False,
+                    'error': 'PC number must be between 0-7'
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def activate_instrument(self, pc_number: int) -> Dict:
+        """Activar instrumento específico (cambio rápido)"""
+        try:
+            if 0 <= pc_number <= 7:
+                command = {
+                    'type': 'set_instrument',
+                    'pc': pc_number,
+                    'timestamp': time.time()
+                }
+                
+                success = self._send_command(command)
+                
+                if success:
+                    state = self.get_current_state()
+                    instrument_name = state.get('instruments', {}).get(pc_number, {}).get('name', f'PC {pc_number}')
+                    self._log_activity(f"Activated {instrument_name} (PC {pc_number})")
+                    
+                    return {
+                        'success': True,
+                        'message': f"Activated {instrument_name}",
+                        'current_instrument': pc_number
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'message': 'Error comunicando con MIDI Engine'
+                    }
             else:
                 return {
                     'success': False,
@@ -60,13 +136,26 @@ class MIDIControllerAPI:
     def set_effect(self, effect_name: str, value: int) -> Dict:
         """Configurar efecto global"""
         try:
-            # TODO: Implementar control de efectos en FluidSynth
-            self._log_activity(f"Set {effect_name} to {value}")
-            
-            return {
-                'success': True,
-                'message': f"{effect_name} set to {value}"
+            command = {
+                'type': 'set_effect',
+                'effect': effect_name,
+                'value': value,
+                'timestamp': time.time()
             }
+            
+            success = self._send_command(command)
+            
+            if success:
+                self._log_activity(f"Set {effect_name} to {value}%")
+                return {
+                    'success': True,
+                    'message': f"{effect_name} set to {value}%"
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': 'Error comunicando con MIDI Engine'
+                }
             
         except Exception as e:
             return {
@@ -77,8 +166,15 @@ class MIDIControllerAPI:
     def panic(self) -> Dict:
         """Detener todas las notas (PANIC)"""
         try:
-            # TODO: Implementar panic en sistema MIDI real
-            self._log_activity("PANIC - All notes off")
+            command = {
+                'type': 'panic',
+                'timestamp': time.time()
+            }
+            
+            success = self._send_command(command)
+            
+            if success:
+                self._log_activity("PANIC - All notes off")
             
             return {
                 'success': True,
@@ -190,3 +286,39 @@ class MIDIControllerAPI:
             123: "Bird Tweet", 124: "Telephone Ring", 125: "Helicopter",
             126: "Applause", 127: "Gunshot"
         }
+    
+    def _send_command(self, command: Dict[str, Any]) -> bool:
+        """Enviar comando al MIDI Engine"""
+        try:
+            # Leer comandos existentes
+            commands = []
+            if os.path.exists(self.command_file):
+                try:
+                    with open(self.command_file, 'r') as f:
+                        commands = json.load(f)
+                except:
+                    commands = []
+            
+            # Agregar nuevo comando
+            commands.append(command)
+            
+            # Escribir comandos actualizados
+            with open(self.command_file, 'w') as f:
+                json.dump(commands, f)
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error enviando comando: {e}")
+            return False
+    
+    def is_engine_running(self) -> bool:
+        """Verificar si el MIDI Engine está ejecutándose"""
+        try:
+            if os.path.exists(self.state_file):
+                # Verificar que el archivo sea reciente (menos de 10 segundos)
+                mtime = os.path.getmtime(self.state_file)
+                return (time.time() - mtime) < 10
+            return False
+        except:
+            return False
