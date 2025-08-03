@@ -22,9 +22,10 @@ class FluidSynthInstrumentExtractor:
             
             if os.path.exists(soundfont_path):
                 self.sfid = self.fs.sfload(soundfont_path)
+                print(f"   ✅ SoundFont cargado: {soundfont_path} (SFID: {self.sfid})")
                 return True
             else:
-                print(f"SoundFont not found: {soundfont_path}")
+                print(f"   ❌ SoundFont no encontrado: {soundfont_path}")
                 return False
                 
         except Exception as e:
@@ -272,7 +273,9 @@ class FluidSynthInstrumentExtractor:
             program = instrument['program']
             
             # Try to select the program
+            print(f"   🔧 Configurando: Canal={channel}, Bank={bank}, Program={program}")
             result = self.fs.program_select(channel, self.sfid, bank, program)
+            print(f"   🎹 program_select resultado: {result}")
             return result == 0  # 0 indicates success in FluidSynth
             
         except Exception:
@@ -311,7 +314,8 @@ class FluidSynthInstrumentExtractor:
         if self.fs:
             try:
                 self.fs.delete()
-            except:
-                pass
+                print("   ✅ Recursos de FluidSynth liberados")
+            except Exception as e:
+                print(f"   ⚠️  Error al liberar recursos de FluidSynth: {e}")
             self.fs = None
             self.sfid = None
