@@ -73,8 +73,23 @@ guitar-midi/
 - Install dependencies: `pip install -r requirements.txt`
 - System deps: `sudo apt install python3 python3-pip fluidsynth`
 
-## Known Issues
-- Soundfont path may vary between systems (`/usr/share/sounds/sf2/FluidR3_GM.sf2`)
-- No sample playbook implementation yet
-- No looper functionality yet
-- MIDI Captain must be configured to send Program Change messages
+## System Status: ✅ FUNCIONANDO
+- **Audio**: Configurado automáticamente al arranque
+- **MIDI**: Detección automática de múltiples dispositivos
+- **Auto-inicio**: Servicio systemd configurado y funcionando
+- **Problema USB resuelto**: Parámetros de arranque configurados para múltiples dispositivos
+
+## Configuración Final
+- **Boot delay**: 4 segundos configurado en `/boot/firmware/config.txt`
+- **USB timing**: Parámetros de cmdline.txt configurados
+- **Audio**: FluidSynth con ganancia 2x para volumen óptimo
+- **Desktop**: Configurado para arranque sin interfaz gráfica
+
+## Sistema Plug & Play
+El sistema está completamente configurado para uso en vivo:
+1. Conectar dispositivos USB MIDI
+2. Encender Raspberry Pi
+3. Esperar 3 minutos
+4. Sistema listo automáticamente
+
+Ver `SETUP_COMPLETO.md` para documentación completa.
