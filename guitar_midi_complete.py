@@ -419,7 +419,7 @@ ctl.!default {
                         # Configuraciones más permisivas para evitar errores
                         self.fs.setting('audio.period-size', 256)  # Tamaño más grande
                         self.fs.setting('audio.periods', 4)        # Más períodos
-                        self.fs.setting('audio.sample-rate', 44100)
+                        # self.fs.setting('audio.sample-rate', 44100)
                     elif driver == 'pulse':
                         # PulseAudio settings
                         self.fs.setting('audio.pulseaudio.server', 'default')
