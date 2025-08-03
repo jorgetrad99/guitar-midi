@@ -273,7 +273,7 @@ class FluidSynthInstrumentExtractor:
             program = instrument['program']
             
             # Try to select the program
-            print(f"   🔧 Configurando: Canal={channel}, Bank={bank}, Program={program}")
+            # print(f"   🔧 Configurando: Canal={channel}, Bank={bank}, Program={program}")
             result = self.fs.program_select(channel, self.sfid, bank, program)
             print(f"   🎹 program_select resultado: {result}")
             return result == 0  # 0 indicates success in FluidSynth
