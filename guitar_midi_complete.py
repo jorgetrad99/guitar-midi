@@ -68,7 +68,6 @@ class GuitarMIDIComplete:
         # Componentes del sistema
         self.fs = None  # FluidSynth
         self.sfid = None  # SoundFont ID
-        self.midi_in = None  # MIDI Input
         self.app = None  # Flask App
         self.socketio = None  # SocketIO
         self.audio_device = None  # Dispositivo de audio detectado
@@ -194,25 +193,14 @@ class GuitarMIDIComplete:
         """Inicializar entrada MIDI con auto-conexión"""
         try:
             print("🎛️ Inicializando MIDI input...")
-            self.midi_in = rtmidi.MidiIn()
-            available_ports = self.midi_in.get_ports()
             
-            print(f"📡 Puertos MIDI disponibles: {len(available_ports)}")
-            for i, port in enumerate(available_ports):
-                print(f"   {i}: {port}")
+            # NO usar rtmidi callback para evitar crashes al desconectar
+            # En su lugar, usar solo aconnect para conexiones directas
+            print("   📡 Usando conexiones MIDI directas (sin callbacks rtmidi)")
             
-            if available_ports:
-                # Conectar al primer puerto disponible para callbacks
-                self.midi_in.open_port(0)
-                self.midi_in.set_callback(self._midi_callback)
-                print(f"   ✅ MIDI callback conectado: {available_ports[0]}")
-                
-                # Auto-conectar TODOS los dispositivos MIDI a FluidSynth
-                self._auto_connect_midi_devices()
-                return True
-            else:
-                print("   ⚠️  No se encontraron puertos MIDI")
-                return False
+            # Auto-conectar TODOS los dispositivos MIDI a FluidSynth
+            self._auto_connect_midi_devices()
+            return True
                 
         except Exception as e:
             print(f"❌ Error inicializando MIDI: {e}")
@@ -278,30 +266,55 @@ class GuitarMIDIComplete:
     def _monitor_midi_connections(self):
         """Monitorear y reconectar dispositivos MIDI dinámicamente"""
         last_device_count = 0
+        print("🔍 Iniciando monitoreo MIDI...")
+        
         try:
             while self.is_running:
-                time.sleep(3)  # Verificar cada 3 segundos
-                
-                # Obtener dispositivos actuales
-                current_device_count = self._get_midi_device_count()
-                
-                # Si cambió el número de dispositivos, reconectar todo
-                if current_device_count != last_device_count:
-                    print(f"🔄 Cambio detectado: {last_device_count} -> {current_device_count} dispositivos MIDI")
+                try:
+                    time.sleep(3)  # Verificar cada 3 segundos
                     
-                    # Limpiar conexiones existentes
-                    self._disconnect_all_midi()
+                    # Obtener dispositivos actuales
+                    current_device_count = self._get_midi_device_count()
                     
-                    # Esperar un momento
-                    time.sleep(1)
+                    # Debug: mostrar conteo cada 30 segundos
+                    if hasattr(self, '_debug_counter'):
+                        self._debug_counter += 1
+                    else:
+                        self._debug_counter = 1
                     
-                    # Reconectar todos los dispositivos
-                    self._auto_connect_midi_devices()
+                    if self._debug_counter % 10 == 0:  # Cada 30 segundos
+                        print(f"🔍 Dispositivos MIDI actuales: {current_device_count}")
                     
-                    last_device_count = current_device_count
+                    # Si cambió el número de dispositivos, reconectar todo
+                    if current_device_count != last_device_count:
+                        print(f"🔄 CAMBIO DETECTADO: {last_device_count} -> {current_device_count} dispositivos MIDI")
+                        print(f"⏰ Timestamp: {time.strftime('%H:%M:%S')}")
+                        
+                        # Limpiar conexiones existentes
+                        print("   🧹 Limpiando conexiones antiguas...")
+                        self._disconnect_all_midi()
+                        
+                        # Esperar un momento para estabilizar
+                        time.sleep(2)
+                        
+                        # Reconectar todos los dispositivos
+                        print("   🔗 Reconectando dispositivos...")
+                        self._auto_connect_midi_devices()
+                        
+                        last_device_count = current_device_count
+                        print(f"   ✅ Reconexión completada")
+                        
+                except Exception as inner_e:
+                    print(f"⚠️  Error en ciclo de monitoreo: {inner_e}")
+                    time.sleep(5)  # Esperar más tiempo si hay error
                     
         except Exception as e:
-            print(f"⚠️  Error monitoreando MIDI: {e}")
+            print(f"❌ Error crítico monitoreando MIDI: {e}")
+            # Reintentar después de error crítico
+            time.sleep(10)
+            if self.is_running:
+                print("🔄 Reintentando monitoreo MIDI...")
+                self._monitor_midi_connections()
     
     def _get_midi_device_count(self):
         """Obtener número actual de dispositivos MIDI"""
@@ -820,12 +833,6 @@ class GuitarMIDIComplete:
     def stop(self):
         """Detener sistema completo"""
         self.is_running = False
-        
-        if self.midi_in:
-            try:
-                self.midi_in.close_port()
-            except:
-                pass
         
         if self.fs:
             try:
