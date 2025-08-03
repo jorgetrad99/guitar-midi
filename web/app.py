@@ -58,6 +58,23 @@ def presets():
     """Página de gestión de presets"""
     return render_template('presets.html', state=app_state)
 
+# ==================== RUTAS SIMPLES (SIN WEBSOCKET) ====================
+
+@app.route('/simple')
+def simple_control():
+    """Interfaz simple sin WebSocket"""
+    return render_template('simple_control.html')
+
+@app.route('/simple-instruments')
+def simple_instruments():
+    """Configuración simple de instrumentos"""
+    return render_template('simple_instruments.html')
+
+@app.route('/simple-presets')  
+def simple_presets():
+    """Gestión simple de presets"""
+    return render_template('simple_presets.html')
+
 # ==================== API REST ENDPOINTS ====================
 
 @app.route('/api/instruments', methods=['GET'])
@@ -83,6 +100,37 @@ def update_instrument(pc_number):
         })
         
         return jsonify({'success': True, 'result': result})
+    
+    return jsonify({'error': 'PC number must be 0-7'}), 400
+
+@app.route('/api/instruments/<int:pc_number>/activate', methods=['POST'])
+def activate_instrument(pc_number):
+    """Activar un instrumento específico (para interfaz simple)"""
+    if 0 <= pc_number <= 7:
+        # Cambiar instrumento actual
+        app_state['current_instrument'] = pc_number
+        
+        # Si hay configuración para este PC, aplicarla
+        if pc_number in app_state['instruments']:
+            instrument_data = app_state['instruments'][pc_number]
+            result = midi_api.change_instrument(pc_number, instrument_data)
+        else:
+            # Usar configuración por defecto
+            instruments_default = {
+                0: {'name': 'Piano', 'bank': 0, 'program': 0, 'channel': 0},
+                1: {'name': 'Drums', 'bank': 0, 'program': 0, 'channel': 9},
+                2: {'name': 'Bass', 'bank': 0, 'program': 32, 'channel': 1},
+                3: {'name': 'Guitar', 'bank': 0, 'program': 24, 'channel': 2},
+                4: {'name': 'Saxophone', 'bank': 0, 'program': 64, 'channel': 3},
+                5: {'name': 'Strings', 'bank': 0, 'program': 48, 'channel': 4},
+                6: {'name': 'Organ', 'bank': 0, 'program': 16, 'channel': 5},
+                7: {'name': 'Flute', 'bank': 0, 'program': 73, 'channel': 6}
+            }
+            instrument_data = instruments_default[pc_number]
+            app_state['instruments'][pc_number] = instrument_data
+            result = midi_api.change_instrument(pc_number, instrument_data)
+        
+        return jsonify({'success': True, 'instrument': instrument_data, 'result': result})
     
     return jsonify({'error': 'PC number must be 0-7'}), 400
 
