@@ -277,24 +277,78 @@ class GuitarMIDIComplete:
     
     def _monitor_midi_connections(self):
         """Monitorear y reconectar dispositivos MIDI dinámicamente"""
+        last_device_count = 0
         try:
             while self.is_running:
-                time.sleep(5)  # Verificar cada 5 segundos
+                time.sleep(3)  # Verificar cada 3 segundos
                 
-                # Re-escanear y conectar dispositivos nuevos
-                current_ports = []
-                if self.midi_in:
-                    try:
-                        current_ports = self.midi_in.get_ports()
-                    except:
-                        pass
+                # Obtener dispositivos actuales
+                current_device_count = self._get_midi_device_count()
                 
-                # Si hay nuevos puertos, reconectar
-                if len(current_ports) > 0:
+                # Si cambió el número de dispositivos, reconectar todo
+                if current_device_count != last_device_count:
+                    print(f"🔄 Cambio detectado: {last_device_count} -> {current_device_count} dispositivos MIDI")
+                    
+                    # Limpiar conexiones existentes
+                    self._disconnect_all_midi()
+                    
+                    # Esperar un momento
+                    time.sleep(1)
+                    
+                    # Reconectar todos los dispositivos
                     self._auto_connect_midi_devices()
+                    
+                    last_device_count = current_device_count
                     
         except Exception as e:
             print(f"⚠️  Error monitoreando MIDI: {e}")
+    
+    def _get_midi_device_count(self):
+        """Obtener número actual de dispositivos MIDI"""
+        try:
+            import subprocess
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True)
+            if result.returncode != 0:
+                return 0
+            
+            # Contar dispositivos MIDI de hardware (excluyendo System y Midi Through)
+            count = 0
+            for line in result.stdout.split('\n'):
+                if (line.strip().startswith('client ') and 
+                    '[type=kernel' in line and 
+                    'System' not in line and 
+                    'Midi Through' not in line):
+                    count += 1
+            return count
+        except:
+            return 0
+    
+    def _disconnect_all_midi(self):
+        """Desconectar todas las conexiones MIDI existentes"""
+        try:
+            import subprocess
+            
+            # Obtener todas las conexiones activas
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True)
+            if result.returncode != 0:
+                return
+            
+            # Parsear y desconectar
+            lines = result.stdout.split('\n')
+            for line in lines:
+                if 'Connecting To:' in line:
+                    # Extraer información de conexión
+                    parts = line.strip().split()
+                    if len(parts) >= 3:
+                        target = parts[2]  # Ej: "128:0"
+                        try:
+                            subprocess.run(['aconnect', '-d', ':0', target], 
+                                         capture_output=True, timeout=2)
+                        except:
+                            pass
+                            
+        except Exception as e:
+            print(f"⚠️  Error desconectando MIDI: {e}")
     
     def _midi_callback(self, message, data):
         """Callback para mensajes MIDI entrantes"""
