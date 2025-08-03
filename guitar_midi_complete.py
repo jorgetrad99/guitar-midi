@@ -414,22 +414,36 @@ ctl.!default {
                     self.fs.setting('audio.driver', driver)
                     
                     if driver == 'alsa':
-                        # Configuración ALSA más robusta
-                        self.fs.setting('audio.alsa.device', self.audio_device or 'default')
-                        # Configuraciones más permisivas para evitar errores
-                        self.fs.setting('audio.period-size', 256)  # Tamaño más grande
-                        self.fs.setting('audio.periods', 4)        # Más períodos
-                        # self.fs.setting('audio.sample-rate', 44100)
+                        # Configuración ALSA específica para Raspberry Pi
+                        device = self.audio_device or 'hw:0,0'
+                        print(f"      Dispositivo ALSA: {device}")
+                        
+                        # Configurar parámetros de manera segura
+                        self._safe_setting('audio.alsa.device', device)
+                        self._safe_setting('audio.period-size', 1024)
+                        self._safe_setting('audio.periods', 2)
+                        
+                        # Probar diferentes nombres para sample rate
+                        if not self._safe_setting('audio.sample-rate', 44100):
+                            if not self._safe_setting('synth.sample-rate', 44100):
+                                self._safe_setting('audio.rate', 44100)
+                        
+                        # Configuraciones adicionales
+                        self._safe_setting('synth.audio-channels', 2)
+                        self._safe_setting('synth.audio-groups', 1)
                     elif driver == 'pulse':
                         # PulseAudio settings
                         self.fs.setting('audio.pulseaudio.server', 'default')
                         self.fs.setting('audio.pulseaudio.device', 'default')
                     
-                    # Configuraciones generales
-                    self.fs.setting('synth.gain', 0.8)
-                    self.fs.setting('synth.polyphony', 64)
-                    self.fs.setting('synth.reverb.active', True)
-                    self.fs.setting('synth.chorus.active', True)
+                    # Configuraciones generales optimizadas (usando método seguro)
+                    self._safe_setting('synth.gain', 1.5)              # Ganancia más alta
+                    self._safe_setting('synth.polyphony', 64)           # Polifonía
+                    self._safe_setting('synth.reverb.active', 1)        # Reverb activo (1=True)
+                    self._safe_setting('synth.chorus.active', 1)        # Chorus activo (1=True)
+                    
+                    # Configuraciones adicionales para mejor rendimiento
+                    self._safe_setting('synth.cpu-cores', 1)           # Un core para estabilidad
                     
                     # Intentar iniciar
                     result = self.fs.start(driver=driver)
@@ -445,19 +459,36 @@ ctl.!default {
                     continue
             
             if not audio_started:
-                print("   ⚠️  Intentando modo sin audio (MIDI only)...")
+                print("   ⚠️  Intentando configuración básica...")
                 try:
-                    # Último intento: modo file (sin audio real)
-                    self.fs.setting('audio.driver', 'file')
-                    self.fs.setting('audio.file.name', '/dev/null')
-                    result = self.fs.start(driver='file')
+                    # Reinicializar con configuración mínima
+                    self.fs = fluidsynth.Synth()
+                    
+                    # Configuración básica sin parámetros complejos
+                    self.fs.setting('audio.driver', 'alsa')
+                    device = self.audio_device or 'hw:0,0'
+                    self._safe_setting('audio.alsa.device', device)
+                    self._safe_setting('synth.gain', 1.0)
+                    
+                    result = self.fs.start()
                     if result == 0:
-                        print("   ✅ FluidSynth iniciado en modo MIDI-only")
+                        print("   ✅ FluidSynth iniciado en modo básico")
                         audio_started = True
                     else:
-                        raise Exception("No se pudo iniciar FluidSynth en ningún modo")
+                        # Último intento: modo file (sin audio real)
+                        print("   ⚠️  Intentando modo MIDI-only...")
+                        self.fs = fluidsynth.Synth()
+                        self.fs.setting('audio.driver', 'file')
+                        self._safe_setting('audio.file.name', '/dev/null')
+                        result = self.fs.start()
+                        if result == 0:
+                            print("   ✅ FluidSynth iniciado en modo MIDI-only")
+                            audio_started = True
+                        else:
+                            raise Exception("No se pudo iniciar FluidSynth en ningún modo")
+                            
                 except Exception as e:
-                    print(f"   ❌ Error en modo file: {e}")
+                    print(f"   ❌ Error en configuración básica: {e}")
                     return False
             
             # Cargar SoundFont
@@ -472,6 +503,9 @@ ctl.!default {
             # Configurar instrumento inicial
             self._set_instrument(0)
             
+            # Test de audio para verificar que funciona
+            self._test_audio_output()
+            
             # Inicializar extractor de instrumentos
             self.instrument_extractor = FluidSynthInstrumentExtractor()
             if self.instrument_extractor.initialize(sf_path):
@@ -484,6 +518,42 @@ ctl.!default {
         except Exception as e:
             print(f"❌ Error inicializando FluidSynth: {e}")
             return False
+    
+    def _safe_setting(self, param: str, value) -> bool:
+        """Configurar parámetro FluidSynth de manera segura"""
+        try:
+            result = self.fs.setting(param, value)
+            if result == 0:  # 0 = éxito en FluidSynth
+                print(f"      ✅ {param} = {value}")
+                return True
+            else:
+                print(f"      ⚠️  {param} no soportado")
+                return False
+        except Exception as e:
+            print(f"      ❌ Error configurando {param}: {e}")
+            return False
+    
+    def _test_audio_output(self):
+        """Test rápido de salida de audio"""
+        try:
+            if self.fs and self.sfid is not None:
+                print("   🧪 Probando salida de audio...")
+                
+                # Configurar canal 0 con piano
+                self.fs.program_select(0, self.sfid, 0, 0)  # Canal 0, Bank 0, Program 0 (Piano)
+                
+                # Tocar una nota corta (C4)
+                self.fs.noteon(0, 60, 80)   # Canal 0, Nota C4, Velocidad 80
+                time.sleep(0.2)              # Sonar por 200ms
+                self.fs.noteoff(0, 60)       # Apagar nota
+                
+                print("   ✅ Test de audio completado")
+                print("   🔊 Si no escuchaste nada, revisar conexión de audio")
+            else:
+                print("   ⚠️  No se pudo hacer test de audio (FluidSynth no iniciado)")
+                
+        except Exception as e:
+            print(f"   ⚠️  Error en test de audio: {e}")
     
     def _init_midi_input(self) -> bool:
         """Inicializar entrada MIDI con auto-conexión"""
