@@ -6,10 +6,18 @@ class MidiCaptainController:
     def __init__(self):
         # Inicializa FluidSynth con configuración específica para DietPi
         self.fs = fluidsynth.Synth()
-        # Configurar settings específicos
+        # Configurar settings específicos para baja latencia
         self.fs.setting('audio.driver', 'alsa')
         self.fs.setting('audio.alsa.device', 'hw:0')
         self.fs.setting('synth.gain', 1.5)  # Amplificar 1.5x el volumen
+        
+        # Optimizaciones de latencia
+        self.fs.setting('audio.period-size', 64)    # Buffer pequeño = menor latencia
+        self.fs.setting('audio.periods', 2)         # Número mínimo de buffers
+        self.fs.setting('audio.sample-rate', 44100) # Sample rate estándar
+        self.fs.setting('synth.polyphony', 64)      # Menos voces = menos CPU
+        self.fs.setting('synth.cpu-cores', 4)       # Usar todos los cores de Pi 4
+        
         self.fs.start()
         
         # Carga SoundFont
@@ -133,7 +141,7 @@ def main():
                     
                     controller.handle_midi_message(message)
             
-            time.sleep(0.001)  # Pequeña espera para evitar uso alto de CPU
+            time.sleep(0.0001)  # Latencia mínima para tiempo real
 
     except KeyboardInterrupt:
         print("\n🛑 Saliendo del sistema Guitar-MIDI...")

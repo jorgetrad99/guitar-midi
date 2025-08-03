@@ -28,5 +28,10 @@ echo "🎹 Iniciando sistema MIDI..."
 echo "✅ Sistema listo para tocar en vivo!"
 echo ""
 
-# Ejecutar el script principal
-python scripts/midi_listener.py
+# Configurar prioridades para tiempo real
+echo "⚡ Configurando prioridades de tiempo real..."
+ulimit -r 99
+ulimit -l unlimited
+
+# Ejecutar el script principal con prioridad alta
+nice -n -10 python scripts/midi_listener.py
