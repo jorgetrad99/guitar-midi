@@ -176,12 +176,19 @@ sudo systemctl enable guitar-midi.service
 
 ---
 
-## ⚡ **Solución de Problemas de Arranque USB**
+## ⚡ **Problemas Conocidos**
 
-### **Problema:** Raspberry Pi no arranca con múltiples dispositivos USB MIDI conectados
+### **🔧 SOLUCIONADO: Arranque con múltiples dispositivos USB**
+- **Problema:** Raspberry Pi no arranca con múltiples dispositivos USB MIDI conectados
+- **Solución aplicada:** Configuración de boot_delay en config.txt y parámetros USB en cmdline.txt
+- **Estado:** ✅ Funcionando
 
-### **Solución 1: Configurar `/boot/firmware/config.txt`**
-Agregar al final del archivo:
+### **⚠️ PENDIENTE: Arranque automático con 2 USBs**
+- **Problema actual:** Después de optimizaciones de latencia, el arranque con ambos dispositivos USB conectados dejó de funcionar consistentemente
+- **Workaround temporal:** Conectar un dispositivo durante el arranque, luego conectar el segundo
+- **Solución pendiente:** Revisar y ajustar parámetros de arranque USB para mayor estabilidad
+
+### **Configuración actual en `/boot/firmware/config.txt`:**
 ```ini
 # Configuración USB MIDI para múltiples dispositivos
 boot_delay=4
@@ -189,15 +196,15 @@ boot_delay_ms=2000
 bootcode_delay=2
 ```
 
-### **Solución 2: Configurar `/boot/firmware/cmdline.txt`**
-Agregar al final de la línea existente (separado por espacios):
+### **Configuración actual en `/boot/firmware/cmdline.txt`:**
 ```
 rootdelay=10 usbcore.old_scheme_first=1 usbcore.initial_descriptor_timeout=10000 usb-storage.delay_use=8
 ```
 
-### **Si persiste el problema, aumentar delays:**
-- En `config.txt`: `boot_delay=8`, `boot_delay_ms=4000`
-- En `cmdline.txt`: `rootdelay=15`
+### **Para mayor estabilidad (si el problema persiste):**
+- Aumentar `boot_delay=8` y `boot_delay_ms=4000`
+- Aumentar `rootdelay=15`
+- Usar hub USB con alimentación externa
 
 ---
 
@@ -304,10 +311,16 @@ cd /root/guitar-midi
 ## ✅ **Sistema Plug & Play Listo**
 
 Una vez configurado, el sistema es completamente autónomo:
-- ✅ Arranque automático al encender
+- ✅ Arranque automático al encender (~45 segundos)
 - ✅ Detección automática de dispositivos MIDI
 - ✅ Audio configurado automáticamente
 - ✅ Sin comandos manuales necesarios
-- ✅ Listo para uso en vivo inmediato
+- ✅ Listo para uso en vivo
 
-**Flujo de uso:** Enchufar → Esperar 3 minutos → Tocar 🎸
+**Flujo de uso actual:** 
+1. Enchufar Raspberry Pi con UN dispositivo USB
+2. Esperar 45 segundos
+3. Conectar segundo dispositivo USB
+4. ¡Listo para tocar! 🎸
+
+**Flujo ideal (pendiente):** Enchufar ambos USB → Esperar 45 segundos → Tocar 🎸
