@@ -166,7 +166,7 @@ class GuitarMIDIComplete:
             # Configuración optimizada para Raspberry Pi
             self.fs.setting('audio.driver', 'alsa')
             self.fs.setting('audio.alsa.device', self.audio_device or 'hw:0,0')
-            self.fs.setting('synth.gain', 2.0)
+            self.fs.setting('synth.gain', 1.0)
             # self.fs.setting('audio.periods', 2)
             # self.fs.setting('audio.sample_rate', 44100)
             # self.fs.setting('synth.cpu-cores', 4)
