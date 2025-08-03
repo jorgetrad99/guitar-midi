@@ -267,49 +267,133 @@ class GuitarMIDIComplete:
         """Auto-detectar dispositivo de audio que funciona"""
         print("🔊 Auto-detectando audio...")
         
-        # Configuraciones a probar (Raspberry Pi)
+        # Detectar dispositivos disponibles primero
+        available_devices = self._get_available_audio_devices()
+        
+        # Configuraciones a probar (orden de preferencia)
         audio_configs = [
+            ("default", "Sistema por defecto", None),
             ("hw:0,0", "Jack 3.5mm", 1),
             ("hw:0,1", "HDMI", 2),
-            ("hw:1,0", "USB", None)
+            ("hw:1,0", "USB Audio", None),
+            ("hw:2,0", "USB Audio secundario", None)
         ]
         
+        # Filtrar solo dispositivos disponibles
+        configs_to_test = []
         for device, description, raspi_config in audio_configs:
+            if device == "default" or any(device in avail for avail in available_devices):
+                configs_to_test.append((device, description, raspi_config))
+        
+        if not configs_to_test:
+            print("   ⚠️  No se encontraron dispositivos de audio")
+            self.audio_device = "default"
+            return False
+        
+        for device, description, raspi_config in configs_to_test:
             print(f"   Probando: {description} ({device})")
             
-            # Configurar raspi-config si es necesario
-            if raspi_config:
+            # Configurar raspi-config si es necesario (solo en Raspberry Pi)
+            if raspi_config and os.path.exists('/boot/config.txt'):
                 try:
                     subprocess.run(['sudo', 'raspi-config', 'nonint', 'do_audio', str(raspi_config)], 
-                                 check=True, capture_output=True, timeout=10)
-                    time.sleep(1)
+                                 check=True, capture_output=True, timeout=5)
+                    time.sleep(0.5)
                 except:
                     pass
             
-            # Test del dispositivo
-            try:
-                result = subprocess.run(['speaker-test', '-D', device, '-t', 'sine', '-f', '440', '-c', '2'], 
-                                      timeout=2, capture_output=True)
-                if result.returncode == 0:
-                    print(f"   ✅ Audio detectado: {description}")
-                    self.audio_device = device
-                    self._configure_alsa()
-                    return True
-                else:
-                    print(f"   ❌ No funciona: {description}")
-            except:
-                print(f"   ❌ Error probando: {description}")
+            # Test rápido del dispositivo
+            if self._test_audio_device(device):
+                print(f"   ✅ Audio detectado: {description}")
+                self.audio_device = device
+                self._configure_alsa()
+                return True
+            else:
+                print(f"   ❌ No funciona: {description}")
         
-        print("   ⚠️  No se detectó audio funcionando")
-        self.audio_device = "hw:0,0"  # Fallback
+        print("   ⚠️  Usando dispositivo por defecto")
+        self.audio_device = "default"
         return False
+    
+    def _get_available_audio_devices(self) -> List[str]:
+        """Obtener lista de dispositivos de audio disponibles"""
+        devices = []
+        try:
+            # Usar aplay para listar dispositivos
+            result = subprocess.run(['aplay', '-l'], capture_output=True, text=True, timeout=3)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'card' in line and 'device' in line:
+                        # Extraer hw:X,Y del formato "card X: ... device Y:"
+                        parts = line.split()
+                        card = None
+                        device = None
+                        for i, part in enumerate(parts):
+                            if part.startswith('card') and i+1 < len(parts):
+                                card = parts[i+1].rstrip(':')
+                            elif part.startswith('device') and i+1 < len(parts):
+                                device = parts[i+1].rstrip(':')
+                        
+                        if card is not None and device is not None:
+                            devices.append(f"hw:{card},{device}")
+        except:
+            pass
+        
+        return devices
+    
+    def _test_audio_device(self, device: str) -> bool:
+        """Test rápido de un dispositivo de audio"""
+        try:
+            # Test muy breve para no molestar
+            cmd = ['aplay', '-D', device, '/dev/zero']
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, 
+                                  stderr=subprocess.DEVNULL)
+            time.sleep(0.1)  # Test muy corto
+            proc.terminate()
+            proc.wait(timeout=1)
+            return True
+        except:
+            return False
     
     def _configure_alsa(self):
         """Configurar ALSA con volúmenes óptimos"""
         try:
-            subprocess.run(['amixer', 'set', 'PCM', '100%'], capture_output=True)
-            subprocess.run(['amixer', 'set', 'Master', '100%'], capture_output=True)
-            subprocess.run(['amixer', 'cset', 'numid=1', '100%'], capture_output=True)
+            # Configurar volúmenes de manera más segura
+            commands = [
+                ['amixer', '-q', 'set', 'PCM', '90%'],
+                ['amixer', '-q', 'set', 'Master', '90%'],
+                ['amixer', '-q', 'sset', 'Headphone', '90%'],
+                ['amixer', '-q', 'sset', 'Speaker', '90%']
+            ]
+            
+            for cmd in commands:
+                try:
+                    subprocess.run(cmd, capture_output=True, timeout=2)
+                except:
+                    pass  # Ignorar errores individuales
+            
+            # Crear archivo de configuración ALSA si no existe
+            alsa_conf = """
+pcm.!default {
+    type hw
+    card 0
+    device 0
+}
+ctl.!default {
+    type hw
+    card 0
+}
+"""
+            
+            try:
+                asoundrc_path = os.path.expanduser("~/.asoundrc")
+                if not os.path.exists(asoundrc_path):
+                    with open(asoundrc_path, 'w') as f:
+                        f.write(alsa_conf)
+                    print("   ✅ Configuración ALSA creada")
+            except:
+                pass
+            
             print("   ✅ ALSA configurado")
         except Exception as e:
             print(f"   ⚠️  Error configurando ALSA: {e}")
@@ -320,15 +404,61 @@ class GuitarMIDIComplete:
             print("🎹 Inicializando FluidSynth...")
             self.fs = fluidsynth.Synth()
             
-            # Configuración optimizada para Raspberry Pi
-            self.fs.setting('audio.driver', 'alsa')
-            self.fs.setting('audio.alsa.device', self.audio_device or 'hw:0,0')
-            self.fs.setting('synth.gain', 1.0)
-            self.fs.setting('audio.periods', 2)
-            """ self.fs.setting('audio.sample_rate', 44100)
-            self.fs.setting('synth.cpu_cores', 4) """
+            # Configuración de audio más compatible
+            drivers_to_try = ['alsa', 'pulse', 'oss', 'jack']
+            audio_started = False
             
-            self.fs.start()
+            for driver in drivers_to_try:
+                try:
+                    print(f"   Probando driver de audio: {driver}")
+                    self.fs.setting('audio.driver', driver)
+                    
+                    if driver == 'alsa':
+                        # Configuración ALSA más robusta
+                        self.fs.setting('audio.alsa.device', self.audio_device or 'default')
+                        # Configuraciones más permisivas para evitar errores
+                        self.fs.setting('audio.period-size', 256)  # Tamaño más grande
+                        self.fs.setting('audio.periods', 4)        # Más períodos
+                        self.fs.setting('audio.sample-rate', 44100)
+                    elif driver == 'pulse':
+                        # PulseAudio settings
+                        self.fs.setting('audio.pulseaudio.server', 'default')
+                        self.fs.setting('audio.pulseaudio.device', 'default')
+                    
+                    # Configuraciones generales
+                    self.fs.setting('synth.gain', 0.8)
+                    self.fs.setting('synth.polyphony', 64)
+                    self.fs.setting('synth.reverb.active', True)
+                    self.fs.setting('synth.chorus.active', True)
+                    
+                    # Intentar iniciar
+                    result = self.fs.start(driver=driver)
+                    if result == 0:  # Success
+                        print(f"   ✅ Audio iniciado con driver: {driver}")
+                        audio_started = True
+                        break
+                    else:
+                        print(f"   ❌ Driver {driver} falló")
+                        
+                except Exception as e:
+                    print(f"   ❌ Error con driver {driver}: {e}")
+                    continue
+            
+            if not audio_started:
+                print("   ⚠️  Intentando modo sin audio (MIDI only)...")
+                try:
+                    # Último intento: modo file (sin audio real)
+                    self.fs.setting('audio.driver', 'file')
+                    self.fs.setting('audio.file.name', '/dev/null')
+                    result = self.fs.start(driver='file')
+                    if result == 0:
+                        print("   ✅ FluidSynth iniciado en modo MIDI-only")
+                        audio_started = True
+                    else:
+                        raise Exception("No se pudo iniciar FluidSynth en ningún modo")
+                except Exception as e:
+                    print(f"   ❌ Error en modo file: {e}")
+                    return False
             
             # Cargar SoundFont
             sf_path = "/usr/share/sounds/sf2/FluidR3_GM.sf2"
