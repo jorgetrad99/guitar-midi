@@ -191,16 +191,24 @@ class GuitarMIDIComplete:
             return False
     
     def _init_midi_input(self) -> bool:
-        """Inicializar entrada MIDI"""
+        """Inicializar entrada MIDI con auto-conexión"""
         try:
             print("🎛️ Inicializando MIDI input...")
             self.midi_in = rtmidi.MidiIn()
             available_ports = self.midi_in.get_ports()
             
+            print(f"📡 Puertos MIDI disponibles: {len(available_ports)}")
+            for i, port in enumerate(available_ports):
+                print(f"   {i}: {port}")
+            
             if available_ports:
+                # Conectar al primer puerto disponible para callbacks
                 self.midi_in.open_port(0)
                 self.midi_in.set_callback(self._midi_callback)
-                print(f"   ✅ MIDI conectado: {available_ports[0]}")
+                print(f"   ✅ MIDI callback conectado: {available_ports[0]}")
+                
+                # Auto-conectar TODOS los dispositivos MIDI a FluidSynth
+                self._auto_connect_midi_devices()
                 return True
             else:
                 print("   ⚠️  No se encontraron puertos MIDI")
@@ -209,6 +217,84 @@ class GuitarMIDIComplete:
         except Exception as e:
             print(f"❌ Error inicializando MIDI: {e}")
             return False
+    
+    def _auto_connect_midi_devices(self):
+        """Auto-conectar todos los dispositivos MIDI a FluidSynth"""
+        try:
+            import subprocess
+            
+            # Esperar un momento para que FluidSynth esté listo
+            time.sleep(2)
+            
+            # Obtener lista de clientes MIDI
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("   ⚠️  No se pudo obtener lista de dispositivos MIDI")
+                return
+            
+            lines = result.stdout.split('\n')
+            midi_inputs = []
+            fluidsynth_port = None
+            
+            # Parsear salida de aconnect
+            for line in lines:
+                line = line.strip()
+                if line.startswith('client ') and '[type=kernel' in line:
+                    # Dispositivo MIDI de hardware
+                    client_num = line.split(':')[0].replace('client ', '')
+                    device_name = line.split("'")[1] if "'" in line else "Unknown"
+                    if 'System' not in device_name and 'Midi Through' not in device_name:
+                        midi_inputs.append((client_num, device_name))
+                elif line.startswith('client ') and 'FLUID Synth' in line:
+                    # FluidSynth port
+                    fluidsynth_port = line.split(':')[0].replace('client ', '')
+            
+            if not fluidsynth_port:
+                print("   ⚠️  FluidSynth no encontrado para auto-conexión")
+                return
+            
+            # Conectar cada dispositivo MIDI a FluidSynth
+            connected_devices = []
+            for client_num, device_name in midi_inputs:
+                try:
+                    cmd = ['aconnect', f'{client_num}:0', f'{fluidsynth_port}:0']
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        connected_devices.append(device_name)
+                        print(f"   ✅ Conectado: {device_name} -> FluidSynth")
+                    else:
+                        print(f"   ⚠️  No se pudo conectar: {device_name}")
+                except Exception as e:
+                    print(f"   ❌ Error conectando {device_name}: {e}")
+            
+            if connected_devices:
+                print(f"   🎹 Auto-conectados {len(connected_devices)} dispositivos MIDI")
+            else:
+                print("   ⚠️  No se conectaron dispositivos MIDI automáticamente")
+                
+        except Exception as e:
+            print(f"❌ Error en auto-conexión MIDI: {e}")
+    
+    def _monitor_midi_connections(self):
+        """Monitorear y reconectar dispositivos MIDI dinámicamente"""
+        try:
+            while self.is_running:
+                time.sleep(5)  # Verificar cada 5 segundos
+                
+                # Re-escanear y conectar dispositivos nuevos
+                current_ports = []
+                if self.midi_in:
+                    try:
+                        current_ports = self.midi_in.get_ports()
+                    except:
+                        pass
+                
+                # Si hay nuevos puertos, reconectar
+                if len(current_ports) > 0:
+                    self._auto_connect_midi_devices()
+                    
+        except Exception as e:
+            print(f"⚠️  Error monitoreando MIDI: {e}")
     
     def _midi_callback(self, message, data):
         """Callback para mensajes MIDI entrantes"""
@@ -658,10 +744,14 @@ class GuitarMIDIComplete:
             # 4. Inicializar servidor web
             self._init_web_server()
             
-            # 5. Mostrar información del sistema
+            # 5. Iniciar monitoreo MIDI en hilo separado
+            midi_monitor_thread = threading.Thread(target=self._monitor_midi_connections, daemon=True)
+            midi_monitor_thread.start()
+            
+            # 6. Mostrar información del sistema
             self._show_system_info()
             
-            # 6. Ejecutar servidor (bloqueante)
+            # 7. Ejecutar servidor (bloqueante)
             self.is_running = True
             print("🌐 Servidor web iniciando...")
             self.socketio.run(self.app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
