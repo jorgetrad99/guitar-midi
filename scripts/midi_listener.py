@@ -12,10 +12,10 @@ class MidiCaptainController:
         self.fs.setting('synth.gain', 1.5)  # Amplificar 1.5x el volumen
         
         # Optimizaciones de latencia
-        self.fs.setting('audio.period-size', 32)    # Buffer pequeño = menor latencia
+        # self.fs.setting('audio.period-size', 32)    # Buffer pequeño = menor latencia
         self.fs.setting('audio.periods', 2)         # Número mínimo de buffers
         self.fs.setting('audio.sample-rate', 44100) # Sample rate estándar
-        self.fs.setting('synth.polyphony', 64)      # Menos voces = menos CPU
+        # self.fs.setting('synth.polyphony', 64)      # Menos voces = menos CPU
         self.fs.setting('synth.cpu-cores', 4)       # Usar todos los cores de Pi 4
         
         self.fs.start()
