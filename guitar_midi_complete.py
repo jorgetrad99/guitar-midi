@@ -792,6 +792,11 @@ ctl.!default {
             if not self.fs or self.sfid is None:
                 print("   ❌ FluidSynth no inicializado")
                 return False
+            
+            channel = instrument['channel']
+            bank = instrument['bank']
+            program = instrument['program']
+            print(f"   🔧 Configurando (en _set_instrument): Canal={channel}, Bank={bank}, Program={program}")
                 
             channel = instrument['channel']
             bank = instrument['bank'] 
