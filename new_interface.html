@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎸 Guitar-MIDI Complete</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
+            color: white; user-select: none; min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* HEADER */
+        .header { 
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            padding: 15px 20px; text-align: center; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .title { font-size: clamp(1.4rem, 4vw, 1.8rem); font-weight: bold; margin-bottom: 8px; }
+        .status { 
+            padding: 6px 16px; background: #4CAF50; border-radius: 20px; 
+            display: inline-block; font-size: 0.8rem; font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        /* NAVEGACIÓN MÓVIL */
+        .nav-tabs {
+            display: flex; background: rgba(255,255,255,0.05);
+            margin: 20px; border-radius: 15px; overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .nav-tab {
+            flex: 1; padding: 12px 10px; text-align: center; cursor: pointer;
+            background: transparent; border: none; color: rgba(255,255,255,0.7);
+            font-size: 0.9rem; font-weight: 500; transition: all 0.3s;
+        }
+        .nav-tab.active {
+            background: linear-gradient(135deg, #4CAF50, #66BB6A);
+            color: white; font-weight: 600;
+        }
+        .nav-tab:hover:not(.active) { background: rgba(255,255,255,0.1); }
+        
+        /* CONTENEDOR PRINCIPAL */
+        .main { 
+            padding: 0 20px 100px; max-width: 800px; margin: 0 auto;
+        }
+        
+        /* SECCIONES */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* INSTRUMENTO ACTUAL */
+        .current-instrument {
+            text-align: center; padding: 25px; margin-bottom: 25px;
+            background: linear-gradient(135deg, #4CAF50, #66BB6A);
+            border-radius: 20px; box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3);
+        }
+        .current-icon { font-size: clamp(3rem, 8vw, 4rem); margin-bottom: 15px; }
+        .current-name { font-size: clamp(1.2rem, 4vw, 1.5rem); font-weight: bold; }
+        .current-pc { margin-top: 8px; font-size: 0.9rem; opacity: 0.9; }
+        
+        /* BOTÓN PANIC */
+        .panic-btn {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white; border: none; border-radius: 15px;
+            padding: 16px 25px; font-size: 1.1rem; font-weight: bold;
+            cursor: pointer; width: 100%; margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+            transition: all 0.2s;
+        }
+        .panic-btn:active { transform: scale(0.98); }
+        
+        /* SECCIONES */
+        .section {
+            background: rgba(255,255,255,0.05); border-radius: 20px; 
+            padding: 25px; margin-bottom: 25px; 
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+        .section-title { 
+            font-size: 1.2rem; margin-bottom: 20px; color: #4CAF50; 
+            font-weight: 600; display: flex; align-items: center; gap: 10px;
+        }
+        
+        /* GRID DE PRESETS */
+        .preset-grid {
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px; margin-bottom: 20px;
+        }
+        
+        .preset-btn {
+            background: rgba(255,255,255,0.08); 
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 15px; padding: 15px; text-align: center; 
+            cursor: pointer; transition: all 0.3s; color: white; 
+            position: relative; backdrop-filter: blur(5px);
+            min-height: 120px; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        
+        .preset-btn:active { transform: scale(0.95); }
+        .preset-btn.active { 
+            border-color: #4CAF50; 
+            background: rgba(76, 175, 80, 0.2);
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+        }
+        
+        .preset-number {
+            position: absolute; top: 8px; left: 8px; 
+            background: #4CAF50; color: white; width: 24px; height: 24px; 
+            border-radius: 50%; display: flex; align-items: center; 
+            justify-content: center; font-size: 0.8rem; font-weight: bold;
+        }
+        
+        .preset-icon { font-size: 2rem; margin-bottom: 8px; }
+        .preset-name { font-weight: 500; font-size: 0.9rem; line-height: 1.2; }
+        
+        .edit-btn {
+            position: absolute; top: 8px; right: 8px;
+            background: #2196F3; border: none; border-radius: 50%;
+            width: 24px; height: 24px; color: white; cursor: pointer;
+            font-size: 0.7rem; transition: all 0.2s;
+        }
+        .edit-btn:hover { background: #1976D2; transform: scale(1.1); }
+        
+        /* CONTROLES */
+        .control-item {
+            display: flex; align-items: center; margin-bottom: 20px;
+            flex-wrap: wrap; gap: 10px;
+        }
+        .control-label { 
+            flex: 1; min-width: 120px; font-weight: 500; 
+            font-size: 0.9rem; margin-bottom: 5px;
+        }
+        .control-slider {
+            flex: 2; min-width: 150px; height: 40px; 
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px; outline: none; -webkit-appearance: none;
+            cursor: pointer;
+        }
+        .control-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 30px; height: 30px;
+            background: linear-gradient(135deg, #4CAF50, #66BB6A);
+            border-radius: 50%; cursor: pointer;
+            box-shadow: 0 2px 10px rgba(76, 175, 80, 0.5);
+        }
+        .control-value {
+            min-width: 40px; text-align: center; font-weight: 600;
+            background: rgba(255,255,255,0.1); padding: 8px;
+            border-radius: 10px; font-size: 0.9rem;
+        }
+        
+        /* MODAL DEL EDITOR */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 1000; display: none;
+            justify-content: center; align-items: center; padding: 20px;
+        }
+        .modal.active { display: flex; }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 20px; padding: 25px; width: 100%; max-width: 500px;
+            max-height: 80vh; overflow-y: auto; position: relative;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-title { font-size: 1.3rem; font-weight: bold; color: #4CAF50; }
+        
+        .close-btn {
+            background: none; border: none; color: white; font-size: 1.5rem;
+            cursor: pointer; padding: 5px; border-radius: 50%;
+            transition: all 0.2s;
+        }
+        .close-btn:hover { background: rgba(255,255,255,0.1); }
+        
+        .category-section {
+            margin-bottom: 20px;
+        }
+        .category-title {
+            font-size: 1rem; font-weight: 600; margin-bottom: 10px;
+            color: #66BB6A; display: flex; align-items: center; gap: 8px;
+        }
+        .instrument-list {
+            display: grid; grid-template-columns: 1fr;
+            gap: 8px; max-height: 200px; overflow-y: auto;
+        }
+        .instrument-option {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px; padding: 12px; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 12px;
+        }
+        .instrument-option:hover {
+            background: rgba(76, 175, 80, 0.1); border-color: #4CAF50;
+        }
+        .instrument-option.selected {
+            background: rgba(76, 175, 80, 0.2); border-color: #4CAF50;
+        }
+        
+        .save-btn {
+            background: linear-gradient(135deg, #4CAF50, #66BB6A);
+            color: white; border: none; border-radius: 12px;
+            padding: 12px 25px; font-weight: 600; cursor: pointer;
+            width: 100%; margin-top: 15px; transition: all 0.2s;
+        }
+        .save-btn:hover { transform: translateY(-1px); }
+        
+        /* RESPONSIVO */
+        @media (max-width: 768px) {
+            .main { padding: 0 15px 80px; }
+            .nav-tabs { margin: 15px; }
+            .section { padding: 20px; margin-bottom: 20px; }
+            .preset-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .preset-btn { min-height: 100px; padding: 12px; }
+            .control-item { flex-direction: column; align-items: stretch; }
+            .control-label { margin-bottom: 8px; }
+        }
+        
+        @media (max-width: 480px) {
+            .preset-grid { grid-template-columns: repeat(2, 1fr); }
+            .modal-content { padding: 20px; margin: 10px; }
+        }
+        
+        /* ANIMACIONES */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .section { animation: fadeIn 0.3s ease-out; }
+        
+        /* SCROLLBAR PERSONALIZADA */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #4CAF50; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #66BB6A; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1 class="title">🎸 Guitar-MIDI Complete</h1>
+        <div class="status" id="status">✅ Sistema Listo</div>
+    </header>
+
+    <!-- Navegación por pestañas -->
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showTab('presets')">🎛️ Presets</button>
+        <button class="nav-tab" onclick="showTab('effects')">🔊 Efectos</button>
+        <button class="nav-tab" onclick="showTab('info')">ℹ️ Info</button>
+    </div>
+
+    <main class="main">
+        <!-- Instrumento Actual -->
+        <div class="current-instrument">
+            <div class="current-icon" id="currentIcon">🎹</div>
+            <div class="current-name" id="currentName">Acoustic Grand Piano</div>
+            <div class="current-pc">Preset <span id="currentPC">0</span></div>
+        </div>
+
+        <!-- Botón PANIC -->
+        <button class="panic-btn" onclick="panic()">🚨 PANIC - Detener Todo</button>
+
+        <!-- TAB: Presets -->
+        <div id="presets" class="tab-content active">
+            <div class="section">
+                <h2 class="section-title">🎛️ Presets Configurables</h2>
+                <div class="preset-grid" id="presetGrid">
+                    <!-- Los presets se cargan dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Efectos -->
+        <div id="effects" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">🔊 Controles Globales</h2>
+                <div class="control-item">
+                    <label class="control-label">🔊 Volumen Master</label>
+                    <input type="range" class="control-slider" id="masterVolume" min="0" max="100" value="80" 
+                           oninput="updateEffect('master_volume', this.value)">
+                    <div class="control-value" id="masterVolumeValue">80%</div>
+                </div>
+                <div class="control-item">
+                    <label class="control-label">🌊 Reverb Global</label>
+                    <input type="range" class="control-slider" id="globalReverb" min="0" max="100" value="50"
+                           oninput="updateEffect('global_reverb', this.value)">
+                    <div class="control-value" id="globalReverbValue">50%</div>
+                </div>
+                <div class="control-item">
+                    <label class="control-label">🎵 Chorus Global</label>
+                    <input type="range" class="control-slider" id="globalChorus" min="0" max="100" value="30"
+                           oninput="updateEffect('global_chorus', this.value)">
+                    <div class="control-value" id="globalChorusValue">30%</div>
+                </div>
+                <div class="control-item">
+                    <label class="control-label">🔧 Filtro Cutoff</label>
+                    <input type="range" class="control-slider" id="globalCutoff" min="0" max="100" value="64"
+                           oninput="updateEffect('global_cutoff', this.value)">
+                    <div class="control-value" id="globalCutoffValue">64%</div>
+                </div>
+                <div class="control-item">
+                    <label class="control-label">🎚️ Resonancia</label>
+                    <input type="range" class="control-slider" id="globalResonance" min="0" max="100" value="0"
+                           oninput="updateEffect('global_resonance', this.value)">
+                    <div class="control-value" id="globalResonanceValue">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Info -->
+        <div id="info" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">ℹ️ Información del Sistema</h2>
+                <div style="line-height: 1.6;">
+                    <p><strong>🎸 Guitar-MIDI Complete v2.0</strong></p>
+                    <p>Sistema unificado de audio MIDI</p>
+                    <br>
+                    <p><strong>⌨️ Atajos de Teclado:</strong></p>
+                    <ul style="list-style: none; padding-left: 20px;">
+                        <li>• P = PANIC (detener todo)</li>
+                        <li>• 0-7 = Cambiar preset</li>
+                    </ul>
+                    <br>
+                    <p><strong>🔧 Funcionalidades:</strong></p>
+                    <ul style="list-style: none; padding-left: 20px;">
+                        <li>• 8 presets configurables</li>
+                        <li>• 128+ instrumentos GM</li>
+                        <li>• Efectos globales en tiempo real</li>
+                        <li>• Auto-conexión MIDI</li>
+                        <li>• Interfaz móvil adaptativa</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Editor de Presets -->
+    <div id="presetModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">📝 Editar Preset <span id="editingPresetNumber">0</span></h3>
+                <button class="close-btn" onclick="closePresetEditor()">×</button>
+            </div>
+            <div id="instrumentCategories">
+                <!-- Las categorías se cargan dinámicamente -->
+            </div>
+            <button class="save-btn" onclick="savePreset()">💾 Guardar Preset</button>
+        </div>
+    </div>
+
+    <script>
+        let currentInstrument = 0;
+        let presets = {};
+        let instrumentLibrary = {};
+        let editingPreset = null;
+        let selectedInstrument = null;
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPresets();
+            loadInstrumentLibrary();
+            setupKeyboardShortcuts();
+        });
+
+        // Navegación por pestañas
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Cargar presets desde el servidor
+        function loadPresets() {
+            fetch('/api/presets')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        presets = data.presets;
+                        renderPresets();
+                        updateCurrentInstrument(0); // Mostrar preset 0 por defecto
+                    }
+                })
+                .catch(() => showStatus('❌ Error cargando presets', '#f44336'));
+        }
+
+        // Cargar librería de instrumentos
+        function loadInstrumentLibrary() {
+            fetch('/api/instruments/library')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        instrumentLibrary = data.categories;
+                    }
+                })
+                .catch(() => console.error('Error cargando librería de instrumentos'));
+        }
+
+        // Renderizar grid de presets
+        function renderPresets() {
+            const grid = document.getElementById('presetGrid');
+            grid.innerHTML = '';
+            
+            for (let i = 0; i < 8; i++) {
+                const preset = presets[i] || {name: 'Sin configurar', icon: '❓'};
+                const presetBtn = document.createElement('div');
+                presetBtn.className = `preset-btn ${i === currentInstrument ? 'active' : ''}`;
+                presetBtn.onclick = () => changeInstrument(i);
+                
+                presetBtn.innerHTML = `
+                    <div class="preset-number">${i}</div>
+                    <button class="edit-btn" onclick="event.stopPropagation(); openPresetEditor(${i})" title="Editar preset">✏️</button>
+                    <div class="preset-icon">${preset.icon}</div>
+                    <div class="preset-name">${preset.name}</div>
+                `;
+                
+                grid.appendChild(presetBtn);
+            }
+        }
+
+        // Cambiar instrumento activo
+        function changeInstrument(pc) {
+            const preset = presets[pc];
+            if (!preset) return;
+            
+            // Actualizar UI
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.preset-btn')[pc].classList.add('active');
+            
+            updateCurrentInstrument(pc);
+            currentInstrument = pc;
+            
+            // Enviar al servidor
+            fetch(`/api/instruments/${pc}/activate`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus(`✅ ${preset.name} activado`, '#4CAF50');
+                    } else {
+                        showStatus('❌ Error activando preset', '#f44336');
+                    }
+                })
+                .catch(() => showStatus('❌ Error de conexión', '#f44336'));
+        }
+
+        // Actualizar información del instrumento actual
+        function updateCurrentInstrument(pc) {
+            const preset = presets[pc];
+            if (preset) {
+                document.getElementById('currentIcon').textContent = preset.icon;
+                document.getElementById('currentName').textContent = preset.name;
+                document.getElementById('currentPC').textContent = pc;
+            }
+        }
+
+        // Actualizar efectos
+        function updateEffect(effect, value) {
+            const data = {};
+            data[effect] = parseInt(value);
+            
+            // Actualizar el valor mostrado
+            const valueElement = document.getElementById(effect.replace('_', '') + 'Value');
+            if (valueElement) {
+                valueElement.textContent = value + '%';
+            }
+            
+            fetch('/api/effects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.success) {
+                      showStatus(`🎛️ ${effect}: ${value}%`, '#4CAF50');
+                  }
+              })
+              .catch(() => showStatus('❌ Error aplicando efecto', '#f44336'));
+        }
+
+        // Abrir editor de presets
+        function openPresetEditor(presetId) {
+            editingPreset = presetId;
+            selectedInstrument = null;
+            
+            document.getElementById('editingPresetNumber').textContent = presetId;
+            renderInstrumentCategories();
+            document.getElementById('presetModal').classList.add('active');
+        }
+
+        // Cerrar editor de presets
+        function closePresetEditor() {
+            document.getElementById('presetModal').classList.remove('active');
+            editingPreset = null;
+            selectedInstrument = null;
+        }
+
+        // Renderizar categorías de instrumentos
+        function renderInstrumentCategories() {
+            const container = document.getElementById('instrumentCategories');
+            container.innerHTML = '';
+            
+            Object.keys(instrumentLibrary).forEach(category => {
+                const section = document.createElement('div');
+                section.className = 'category-section';
+                
+                const title = document.createElement('div');
+                title.className = 'category-title';
+                title.textContent = `🎵 ${category}`;
+                section.appendChild(title);
+                
+                const list = document.createElement('div');
+                list.className = 'instrument-list';
+                
+                instrumentLibrary[category].forEach(instrument => {
+                    const option = document.createElement('div');
+                    option.className = 'instrument-option';
+                    option.onclick = () => selectInstrument(instrument, option);
+                    
+                    option.innerHTML = `
+                        <span style="font-size: 1.2rem;">${instrument.icon}</span>
+                        <div>
+                            <div style="font-weight: 500;">${instrument.name}</div>
+                            <div style="font-size: 0.8rem; opacity: 0.7;">Program: ${instrument.program} | Bank: ${instrument.bank}</div>
+                        </div>
+                    `;
+                    
+                    list.appendChild(option);
+                });
+                
+                section.appendChild(list);
+                container.appendChild(section);
+            });
+        }
+
+        // Seleccionar instrumento en el editor
+        function selectInstrument(instrument, element) {
+            document.querySelectorAll('.instrument-option').forEach(opt => opt.classList.remove('selected'));
+            element.classList.add('selected');
+            selectedInstrument = instrument;
+        }
+
+        // Guardar preset editado
+        function savePreset() {
+            if (!selectedInstrument || editingPreset === null) {
+                showStatus('❌ Selecciona un instrumento', '#f44336');
+                return;
+            }
+            
+            const data = {
+                program: selectedInstrument.program,
+                instrument_id: selectedInstrument.id
+            };
+            
+            fetch(`/api/presets/${editingPreset}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    presets[editingPreset] = data.preset;
+                    renderPresets();
+                    closePresetEditor();
+                    showStatus(`✅ Preset ${editingPreset} actualizado`, '#4CAF50');
+                } else {
+                    showStatus('❌ Error guardando preset', '#f44336');
+                }
+            })
+            .catch(() => showStatus('❌ Error de conexión', '#f44336'));
+        }
+
+        // Función PANIC
+        function panic() {
+            fetch('/api/system/panic', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus('🚨 PANIC - Todo detenido', '#f44336');
+                    }
+                })
+                .catch(() => showStatus('❌ Error PANIC', '#f44336'));
+        }
+
+        // Mostrar estado
+        function showStatus(message, color) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.background = color;
+            setTimeout(() => {
+                status.textContent = '✅ Sistema Listo';
+                status.style.background = '#4CAF50';
+            }, 3000);
+        }
+
+        // Atajos de teclado
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', function(e) {
+                if (e.target.tagName === 'INPUT' || document.getElementById('presetModal').classList.contains('active')) return;
+                
+                if (e.key === 'p' || e.key === 'P') {
+                    e.preventDefault();
+                    panic();
+                } else if (e.key >= '0' && e.key <= '7') {
+                    e.preventDefault();
+                    const pc = parseInt(e.key);
+                    changeInstrument(pc);
+                }
+            });
+        }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('presetModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePresetEditor();
+            }
+        });
+
+        console.log('🎸 Guitar-MIDI Complete System v2.0 - Interfaz Cargada');
+        console.log('⌨️ Atajos: P=PANIC, 0-7=Presets');
+    </script>
+</body>
+</html>

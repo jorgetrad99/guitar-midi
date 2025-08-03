@@ -46,23 +46,175 @@ class GuitarMIDIComplete:
         self.db_path = "guitar_midi.db"
         self._init_database()
         
-        # Configuración de instrumentos (General MIDI)
-        self.instruments = {
-            0: {"name": "Piano", "program": 0, "bank": 0, "channel": 0, "icon": "🎹"},
-            1: {"name": "Drums", "program": 0, "bank": 128, "channel": 9, "icon": "🥁"},
-            2: {"name": "Bass", "program": 32, "bank": 0, "channel": 1, "icon": "🎸"},
-            3: {"name": "Guitar", "program": 24, "bank": 0, "channel": 2, "icon": "🎸"},
-            4: {"name": "Saxophone", "program": 64, "bank": 0, "channel": 3, "icon": "🎷"},
-            5: {"name": "Strings", "program": 48, "bank": 0, "channel": 4, "icon": "🎻"},
-            6: {"name": "Organ", "program": 16, "bank": 0, "channel": 5, "icon": "🎹"},
+        # Librería completa de instrumentos General MIDI
+        self.all_instruments = {
+            # PIANOS (0-7)
+            0: {"name": "Acoustic Grand Piano", "program": 0, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            1: {"name": "Bright Acoustic Piano", "program": 1, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            2: {"name": "Electric Grand Piano", "program": 2, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            3: {"name": "Honky-tonk Piano", "program": 3, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            4: {"name": "Electric Piano 1", "program": 4, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            5: {"name": "Electric Piano 2", "program": 5, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            6: {"name": "Harpsichord", "program": 6, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            7: {"name": "Clavi", "program": 7, "bank": 0, "channel": 0, "icon": "🎹", "category": "Piano"},
+            # PERCUSION (8-15)
+            8: {"name": "Celesta", "program": 8, "bank": 0, "channel": 0, "icon": "🔔", "category": "Chromatic Percussion"},
+            9: {"name": "Glockenspiel", "program": 9, "bank": 0, "channel": 0, "icon": "🔔", "category": "Chromatic Percussion"},
+            10: {"name": "Music Box", "program": 10, "bank": 0, "channel": 0, "icon": "🎵", "category": "Chromatic Percussion"},
+            11: {"name": "Vibraphone", "program": 11, "bank": 0, "channel": 0, "icon": "🎤", "category": "Chromatic Percussion"},
+            12: {"name": "Marimba", "program": 12, "bank": 0, "channel": 0, "icon": "🥁", "category": "Chromatic Percussion"},
+            13: {"name": "Xylophone", "program": 13, "bank": 0, "channel": 0, "icon": "🎼", "category": "Chromatic Percussion"},
+            14: {"name": "Tubular Bells", "program": 14, "bank": 0, "channel": 0, "icon": "🔔", "category": "Chromatic Percussion"},
+            15: {"name": "Dulcimer", "program": 15, "bank": 0, "channel": 0, "icon": "🎻", "category": "Chromatic Percussion"},
+            # ORGANOS (16-23)
+            16: {"name": "Drawbar Organ", "program": 16, "bank": 0, "channel": 0, "icon": "🎹", "category": "Organ"},
+            17: {"name": "Percussive Organ", "program": 17, "bank": 0, "channel": 0, "icon": "🎹", "category": "Organ"},
+            18: {"name": "Rock Organ", "program": 18, "bank": 0, "channel": 0, "icon": "🎸", "category": "Organ"},
+            19: {"name": "Church Organ", "program": 19, "bank": 0, "channel": 0, "icon": "⛪", "category": "Organ"},
+            20: {"name": "Reed Organ", "program": 20, "bank": 0, "channel": 0, "icon": "🎹", "category": "Organ"},
+            21: {"name": "Accordion", "program": 21, "bank": 0, "channel": 0, "icon": "🪗", "category": "Organ"},
+            22: {"name": "Harmonica", "program": 22, "bank": 0, "channel": 0, "icon": "🎼", "category": "Organ"},
+            23: {"name": "Tango Accordion", "program": 23, "bank": 0, "channel": 0, "icon": "🪗", "category": "Organ"},
+            # GUITARRAS (24-31)
+            24: {"name": "Acoustic Guitar (nylon)", "program": 24, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            25: {"name": "Acoustic Guitar (steel)", "program": 25, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            26: {"name": "Electric Guitar (jazz)", "program": 26, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            27: {"name": "Electric Guitar (clean)", "program": 27, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            28: {"name": "Electric Guitar (muted)", "program": 28, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            29: {"name": "Overdriven Guitar", "program": 29, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            30: {"name": "Distortion Guitar", "program": 30, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            31: {"name": "Guitar harmonics", "program": 31, "bank": 0, "channel": 0, "icon": "🎸", "category": "Guitar"},
+            # BAJOS (32-39)
+            32: {"name": "Acoustic Bass", "program": 32, "bank": 0, "channel": 1, "icon": "🎸", "category": "Bass"},
+            33: {"name": "Electric Bass (finger)", "program": 33, "bank": 0, "channel": 1, "icon": "🎸", "category": "Bass"},
+            34: {"name": "Electric Bass (pick)", "program": 34, "bank": 0, "channel": 1, "icon": "🎸", "category": "Bass"},
+            35: {"name": "Fretless Bass", "program": 35, "bank": 0, "channel": 1, "icon": "🎸", "category": "Bass"},
+            36: {"name": "Slap Bass 1", "program": 36, "bank": 0, "channel": 1, "icon": "🎸", "category": "Bass"},
+            37: {"name": "Slap Bass 2", "program": 37, "bank": 0, "channel": 1, "icon": "🎸", "category": "Bass"},
+            38: {"name": "Synth Bass 1", "program": 38, "bank": 0, "channel": 1, "icon": "🎛️", "category": "Bass"},
+            39: {"name": "Synth Bass 2", "program": 39, "bank": 0, "channel": 1, "icon": "🎛️", "category": "Bass"},
+            # CUERDAS (40-47)
+            40: {"name": "Violin", "program": 40, "bank": 0, "channel": 2, "icon": "🎻", "category": "Strings"},
+            41: {"name": "Viola", "program": 41, "bank": 0, "channel": 2, "icon": "🎻", "category": "Strings"},
+            42: {"name": "Cello", "program": 42, "bank": 0, "channel": 2, "icon": "🎻", "category": "Strings"},
+            43: {"name": "Contrabass", "program": 43, "bank": 0, "channel": 2, "icon": "🎻", "category": "Strings"},
+            44: {"name": "Tremolo Strings", "program": 44, "bank": 0, "channel": 2, "icon": "🎻", "category": "Strings"},
+            45: {"name": "Pizzicato Strings", "program": 45, "bank": 0, "channel": 2, "icon": "🎻", "category": "Strings"},
+            46: {"name": "Orchestral Harp", "program": 46, "bank": 0, "channel": 2, "icon": "🎼", "category": "Strings"},
+            47: {"name": "Timpani", "program": 47, "bank": 0, "channel": 2, "icon": "🥁", "category": "Strings"},
+            # ENSEMBLES (48-55)
+            48: {"name": "String Ensemble 1", "program": 48, "bank": 0, "channel": 3, "icon": "🎻", "category": "Ensemble"},
+            49: {"name": "String Ensemble 2", "program": 49, "bank": 0, "channel": 3, "icon": "🎻", "category": "Ensemble"},
+            50: {"name": "SynthStrings 1", "program": 50, "bank": 0, "channel": 3, "icon": "🎛️", "category": "Ensemble"},
+            51: {"name": "SynthStrings 2", "program": 51, "bank": 0, "channel": 3, "icon": "🎛️", "category": "Ensemble"},
+            52: {"name": "Choir Aahs", "program": 52, "bank": 0, "channel": 3, "icon": "👥", "category": "Ensemble"},
+            53: {"name": "Voice Oohs", "program": 53, "bank": 0, "channel": 3, "icon": "👥", "category": "Ensemble"},
+            54: {"name": "Synth Voice", "program": 54, "bank": 0, "channel": 3, "icon": "🎛️", "category": "Ensemble"},
+            55: {"name": "Orchestra Hit", "program": 55, "bank": 0, "channel": 3, "icon": "🎺", "category": "Ensemble"},
+            # BRONCES (56-63)
+            56: {"name": "Trumpet", "program": 56, "bank": 0, "channel": 4, "icon": "🎺", "category": "Brass"},
+            57: {"name": "Trombone", "program": 57, "bank": 0, "channel": 4, "icon": "🎺", "category": "Brass"},
+            58: {"name": "Tuba", "program": 58, "bank": 0, "channel": 4, "icon": "🎺", "category": "Brass"},
+            59: {"name": "Muted Trumpet", "program": 59, "bank": 0, "channel": 4, "icon": "🎺", "category": "Brass"},
+            60: {"name": "French Horn", "program": 60, "bank": 0, "channel": 4, "icon": "🎺", "category": "Brass"},
+            61: {"name": "Brass Section", "program": 61, "bank": 0, "channel": 4, "icon": "🎺", "category": "Brass"},
+            62: {"name": "SynthBrass 1", "program": 62, "bank": 0, "channel": 4, "icon": "🎛️", "category": "Brass"},
+            63: {"name": "SynthBrass 2", "program": 63, "bank": 0, "channel": 4, "icon": "🎛️", "category": "Brass"},
+            # LENGÜETAS (64-71)
+            64: {"name": "Soprano Sax", "program": 64, "bank": 0, "channel": 5, "icon": "🎷", "category": "Reed"},
+            65: {"name": "Alto Sax", "program": 65, "bank": 0, "channel": 5, "icon": "🎷", "category": "Reed"},
+            66: {"name": "Tenor Sax", "program": 66, "bank": 0, "channel": 5, "icon": "🎷", "category": "Reed"},
+            67: {"name": "Baritone Sax", "program": 67, "bank": 0, "channel": 5, "icon": "🎷", "category": "Reed"},
+            68: {"name": "Oboe", "program": 68, "bank": 0, "channel": 5, "icon": "🪈", "category": "Reed"},
+            69: {"name": "English Horn", "program": 69, "bank": 0, "channel": 5, "icon": "🪈", "category": "Reed"},
+            70: {"name": "Bassoon", "program": 70, "bank": 0, "channel": 5, "icon": "🪈", "category": "Reed"},
+            71: {"name": "Clarinet", "program": 71, "bank": 0, "channel": 5, "icon": "🪈", "category": "Reed"},
+            # VIENTOS (72-79)
+            72: {"name": "Piccolo", "program": 72, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            73: {"name": "Flute", "program": 73, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            74: {"name": "Recorder", "program": 74, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            75: {"name": "Pan Flute", "program": 75, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            76: {"name": "Blown Bottle", "program": 76, "bank": 0, "channel": 6, "icon": "🍾", "category": "Pipe"},
+            77: {"name": "Shakuhachi", "program": 77, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            78: {"name": "Whistle", "program": 78, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            79: {"name": "Ocarina", "program": 79, "bank": 0, "channel": 6, "icon": "🪈", "category": "Pipe"},
+            # SYNTH LEAD (80-87)
+            80: {"name": "Lead 1 (square)", "program": 80, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            81: {"name": "Lead 2 (sawtooth)", "program": 81, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            82: {"name": "Lead 3 (calliope)", "program": 82, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            83: {"name": "Lead 4 (chiff)", "program": 83, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            84: {"name": "Lead 5 (charang)", "program": 84, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            85: {"name": "Lead 6 (voice)", "program": 85, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            86: {"name": "Lead 7 (fifths)", "program": 86, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            87: {"name": "Lead 8 (bass + lead)", "program": 87, "bank": 0, "channel": 7, "icon": "🎛️", "category": "Synth Lead"},
+            # SYNTH PAD (88-95)
+            88: {"name": "Pad 1 (new age)", "program": 88, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            89: {"name": "Pad 2 (warm)", "program": 89, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            90: {"name": "Pad 3 (polysynth)", "program": 90, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            91: {"name": "Pad 4 (choir)", "program": 91, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            92: {"name": "Pad 5 (bowed)", "program": 92, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            93: {"name": "Pad 6 (metallic)", "program": 93, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            94: {"name": "Pad 7 (halo)", "program": 94, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            95: {"name": "Pad 8 (sweep)", "program": 95, "bank": 0, "channel": 8, "icon": "🎛️", "category": "Synth Pad"},
+            # EFECTOS FX (96-103)
+            96: {"name": "FX 1 (rain)", "program": 96, "bank": 0, "channel": 9, "icon": "🌧️", "category": "Synth Effects"},
+            97: {"name": "FX 2 (soundtrack)", "program": 97, "bank": 0, "channel": 9, "icon": "🎬", "category": "Synth Effects"},
+            98: {"name": "FX 3 (crystal)", "program": 98, "bank": 0, "channel": 9, "icon": "💎", "category": "Synth Effects"},
+            99: {"name": "FX 4 (atmosphere)", "program": 99, "bank": 0, "channel": 9, "icon": "🌌", "category": "Synth Effects"},
+            100: {"name": "FX 5 (brightness)", "program": 100, "bank": 0, "channel": 9, "icon": "✨", "category": "Synth Effects"},
+            101: {"name": "FX 6 (goblins)", "program": 101, "bank": 0, "channel": 9, "icon": "👹", "category": "Synth Effects"},
+            102: {"name": "FX 7 (echoes)", "program": 102, "bank": 0, "channel": 9, "icon": "🔊", "category": "Synth Effects"},
+            103: {"name": "FX 8 (sci-fi)", "program": 103, "bank": 0, "channel": 9, "icon": "🚀", "category": "Synth Effects"},
+            # ETNICOS (104-111)
+            104: {"name": "Sitar", "program": 104, "bank": 0, "channel": 10, "icon": "🪕", "category": "Ethnic"},
+            105: {"name": "Banjo", "program": 105, "bank": 0, "channel": 10, "icon": "🪕", "category": "Ethnic"},
+            106: {"name": "Shamisen", "program": 106, "bank": 0, "channel": 10, "icon": "🎸", "category": "Ethnic"},
+            107: {"name": "Koto", "program": 107, "bank": 0, "channel": 10, "icon": "🎼", "category": "Ethnic"},
+            108: {"name": "Kalimba", "program": 108, "bank": 0, "channel": 10, "icon": "🎵", "category": "Ethnic"},
+            109: {"name": "Bag pipe", "program": 109, "bank": 0, "channel": 10, "icon": "🪈", "category": "Ethnic"},
+            110: {"name": "Fiddle", "program": 110, "bank": 0, "channel": 10, "icon": "🎻", "category": "Ethnic"},
+            111: {"name": "Shanai", "program": 111, "bank": 0, "channel": 10, "icon": "🪈", "category": "Ethnic"},
+            # PERCUSION (112-119)
+            112: {"name": "Tinkle Bell", "program": 112, "bank": 0, "channel": 11, "icon": "🔔", "category": "Percussive"},
+            113: {"name": "Agogo", "program": 113, "bank": 0, "channel": 11, "icon": "🥁", "category": "Percussive"},
+            114: {"name": "Steel Drums", "program": 114, "bank": 0, "channel": 11, "icon": "🛢️", "category": "Percussive"},
+            115: {"name": "Woodblock", "program": 115, "bank": 0, "channel": 11, "icon": "🪵", "category": "Percussive"},
+            116: {"name": "Taiko Drum", "program": 116, "bank": 0, "channel": 11, "icon": "🥁", "category": "Percussive"},
+            117: {"name": "Melodic Tom", "program": 117, "bank": 0, "channel": 11, "icon": "🥁", "category": "Percussive"},
+            118: {"name": "Synth Drum", "program": 118, "bank": 0, "channel": 11, "icon": "🎛️", "category": "Percussive"},
+            119: {"name": "Reverse Cymbal", "program": 119, "bank": 0, "channel": 11, "icon": "🥁", "category": "Percussive"},
+            # EFECTOS SONOROS (120-127)
+            120: {"name": "Guitar Fret Noise", "program": 120, "bank": 0, "channel": 12, "icon": "🎸", "category": "Sound Effects"},
+            121: {"name": "Breath Noise", "program": 121, "bank": 0, "channel": 12, "icon": "💨", "category": "Sound Effects"},
+            122: {"name": "Seashore", "program": 122, "bank": 0, "channel": 12, "icon": "🌊", "category": "Sound Effects"},
+            123: {"name": "Bird Tweet", "program": 123, "bank": 0, "channel": 12, "icon": "🐦", "category": "Sound Effects"},
+            124: {"name": "Telephone Ring", "program": 124, "bank": 0, "channel": 12, "icon": "📞", "category": "Sound Effects"},
+            125: {"name": "Helicopter", "program": 125, "bank": 0, "channel": 12, "icon": "🚁", "category": "Sound Effects"},
+            126: {"name": "Applause", "program": 126, "bank": 0, "channel": 12, "icon": "👏", "category": "Sound Effects"},
+            127: {"name": "Gunshot", "program": 127, "bank": 0, "channel": 12, "icon": "💥", "category": "Sound Effects"},
+            # BATERIA (canal 9 solo)
+            128: {"name": "Standard Drum Kit", "program": 0, "bank": 128, "channel": 9, "icon": "🥁", "category": "Drums"}
+        }
+        
+        # Presets configurables (8 slots)
+        self.presets = {
+            0: {"name": "Acoustic Grand Piano", "program": 0, "bank": 0, "channel": 0, "icon": "🎹"},
+            1: {"name": "Standard Drum Kit", "program": 0, "bank": 128, "channel": 9, "icon": "🥁"},
+            2: {"name": "Acoustic Bass", "program": 32, "bank": 0, "channel": 1, "icon": "🎸"},
+            3: {"name": "Acoustic Guitar (nylon)", "program": 24, "bank": 0, "channel": 2, "icon": "🎸"},
+            4: {"name": "Alto Sax", "program": 65, "bank": 0, "channel": 3, "icon": "🎷"},
+            5: {"name": "String Ensemble 1", "program": 48, "bank": 0, "channel": 4, "icon": "🎻"},
+            6: {"name": "Drawbar Organ", "program": 16, "bank": 0, "channel": 5, "icon": "🎹"},
             7: {"name": "Flute", "program": 73, "bank": 0, "channel": 6, "icon": "🪈"}
         }
         
-        # Efectos globales
+        # Efectos globales expandidos
         self.effects = {
             'master_volume': 80,
             'global_reverb': 50,
-            'global_chorus': 30
+            'global_chorus': 30,
+            'global_cutoff': 64,
+            'global_resonance': 0
         }
         
         # Componentes del sistema
@@ -383,12 +535,12 @@ class GuitarMIDIComplete:
                         })
     
     def _set_instrument(self, pc: int) -> bool:
-        """Cambiar instrumento activo"""
+        """Cambiar instrumento activo usando presets"""
         try:
-            if pc not in self.instruments:
+            if pc not in self.presets:
                 return False
             
-            instrument = self.instruments[pc]
+            instrument = self.presets[pc]
             
             if self.fs and self.sfid is not None:
                 channel = instrument['channel']
@@ -417,9 +569,35 @@ class GuitarMIDIComplete:
     def _set_effect(self, effect_name: str, value: int) -> bool:
         """Aplicar efecto global"""
         try:
-            if effect_name == 'master_volume' and self.fs:
-                gain = (value / 100.0) * 2.0
-                self.fs.setting('synth.gain', gain)
+            if self.fs:
+                if effect_name == 'master_volume':
+                    # Volumen master
+                    gain = (value / 100.0) * 2.0
+                    self.fs.setting('synth.gain', gain)
+                    
+                elif effect_name == 'global_reverb':
+                    # Reverb global en todos los canales
+                    reverb_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        self.fs.cc(channel, 91, reverb_value)  # CC 91 = Reverb
+                    
+                elif effect_name == 'global_chorus':
+                    # Chorus global en todos los canales
+                    chorus_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        self.fs.cc(channel, 93, chorus_value)  # CC 93 = Chorus
+                        
+                elif effect_name == 'global_cutoff':
+                    # Filtro de corte global
+                    cutoff_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        self.fs.cc(channel, 74, cutoff_value)  # CC 74 = Cutoff
+                        
+                elif effect_name == 'global_resonance':
+                    # Resonancia global
+                    resonance_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        self.fs.cc(channel, 71, resonance_value)  # CC 71 = Resonance
             
             self.effects[effect_name] = value
             
@@ -430,7 +608,7 @@ class GuitarMIDIComplete:
                              (effect_name, str(value)))
                 conn.commit()
             
-            print(f"🎛️ {effect_name}: {value}%")
+            print(f"🎹 {effect_name}: {value}%")
             return True
             
         except Exception as e:
@@ -494,11 +672,54 @@ class GuitarMIDIComplete:
             return jsonify({
                 'success': True,
                 'current_instrument': self.current_instrument,
-                'instruments': self.instruments,
+                'presets': self.presets,
+                'all_instruments': self.all_instruments,
                 'effects': self.effects,
                 'audio_device': self.audio_device,
                 'timestamp': time.time()
             })
+        
+        # API para presets
+        @self.app.route('/api/presets', methods=['GET'])
+        def get_presets():
+            return jsonify({'success': True, 'presets': self.presets})
+        
+        @self.app.route('/api/presets/<int:preset_id>', methods=['PUT'])
+        def update_preset(preset_id):
+            if 0 <= preset_id <= 7:
+                data = request.get_json()
+                if data and 'program' in data:
+                    # Buscar instrumento en la librería completa
+                    instrument_id = data.get('instrument_id', data['program'])
+                    if instrument_id in self.all_instruments:
+                        instrument_data = self.all_instruments[instrument_id]
+                        self.presets[preset_id] = {
+                            'name': instrument_data['name'],
+                            'program': instrument_data['program'],
+                            'bank': instrument_data['bank'],
+                            'channel': instrument_data['channel'],
+                            'icon': instrument_data['icon']
+                        }
+                        return jsonify({'success': True, 'preset': self.presets[preset_id]})
+            return jsonify({'success': False, 'error': 'Invalid preset or data'})
+        
+        @self.app.route('/api/instruments/library', methods=['GET'])
+        def get_instrument_library():
+            # Organizar instrumentos por categoría
+            categories = {}
+            for inst_id, inst_data in self.all_instruments.items():
+                category = inst_data['category']
+                if category not in categories:
+                    categories[category] = []
+                categories[category].append({
+                    'id': inst_id,
+                    'name': inst_data['name'],
+                    'program': inst_data['program'],
+                    'bank': inst_data['bank'],
+                    'channel': inst_data['channel'],
+                    'icon': inst_data['icon']
+                })
+            return jsonify({'success': True, 'categories': categories})
         
         # WebSocket Events
         @self.socketio.on('connect')
@@ -506,7 +727,7 @@ class GuitarMIDIComplete:
             print("📱 Cliente conectado")
             emit('status_update', {
                 'current_instrument': self.current_instrument,
-                'instruments': self.instruments,
+                'presets': self.presets,
                 'effects': self.effects
             })
         
@@ -517,7 +738,7 @@ class GuitarMIDIComplete:
         print("✅ Servidor web listo")
     
     def _render_interface(self):
-        """Renderizar interfaz web móvil integrada"""
+        """Renderizar interfaz web móvil integrada completamente renovada"""
         return '''<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -526,22 +747,53 @@ class GuitarMIDIComplete:
     <title>🎸 Guitar-MIDI Complete</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
             color: white; user-select: none; min-height: 100vh;
+            overflow-x: hidden;
         }
+        
+        /* HEADER */
         .header { 
             background: linear-gradient(135deg, #16213e, #0f3460);
-            padding: 20px; text-align: center; 
+            padding: 15px 20px; text-align: center; 
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            position: sticky; top: 0; z-index: 100;
         }
-        .title { font-size: 1.8rem; font-weight: bold; margin-bottom: 10px; }
+        .title { font-size: clamp(1.4rem, 4vw, 1.8rem); font-weight: bold; margin-bottom: 8px; }
         .status { 
-            padding: 8px 20px; background: #4CAF50; border-radius: 25px; 
-            display: inline-block; font-size: 0.9rem; font-weight: 500;
+            padding: 6px 16px; background: #4CAF50; border-radius: 20px; 
+            display: inline-block; font-size: 0.8rem; font-weight: 500;
+            transition: all 0.3s;
         }
-        .main { padding: 20px; max-width: 600px; margin: 0 auto; padding-bottom: 100px; }
+        
+        /* NAVEGACIÓN MÓVIL */
+        .nav-tabs {
+            display: flex; background: rgba(255,255,255,0.05);
+            margin: 20px; border-radius: 15px; overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .nav-tab {
+            flex: 1; padding: 12px 10px; text-align: center; cursor: pointer;
+            background: transparent; border: none; color: rgba(255,255,255,0.7);
+            font-size: 0.9rem; font-weight: 500; transition: all 0.3s;
+        }
+        .nav-tab.active {
+            background: linear-gradient(135deg, #4CAF50, #66BB6A);
+            color: white; font-weight: 600;
+        }
+        .nav-tab:hover:not(.active) { background: rgba(255,255,255,0.1); }
+        
+        /* CONTENEDOR PRINCIPAL */
+        .main { 
+            padding: 0 20px 100px; max-width: 800px; margin: 0 auto;
+        }
+        
+        /* SECCIONES */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         
         .current-instrument {
             text-align: center; padding: 25px;
