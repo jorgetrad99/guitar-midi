@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(python:*)",
+      "Bash(where python)",
+      "Bash(C:UsersjemtlAppDataLocalProgramsPythonPython312python.exe --version)",
+      "Bash(cmd /c:*)",
+      "Bash(pyenv:*)"
     ],
     "deny": []
   }
