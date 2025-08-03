@@ -3,12 +3,19 @@ System Info API
 Información del sistema y estado del hardware
 """
 
-import psutil
 import time
 import subprocess
 import os
 import sys
 from typing import Dict, List, Any
+
+# Importar psutil con fallback
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("⚠️  psutil no disponible. Funcionalidad de sistema limitada.")
 
 class SystemInfoAPI:
     def __init__(self):
@@ -28,32 +35,48 @@ class SystemInfoAPI:
     def _get_system_info(self) -> Dict[str, Any]:
         """Información del sistema operativo"""
         try:
-            uptime = time.time() - psutil.boot_time()
-            return {
+            system_info = {
                 'os': f"{os.uname().sysname} {os.uname().release}",
                 'hostname': os.uname().nodename,
                 'architecture': os.uname().machine,
-                'uptime_seconds': int(uptime),
-                'uptime_formatted': self._format_uptime(uptime),
                 'python_version': sys.version.split()[0],
                 'app_uptime': int(time.time() - self.start_time)
             }
+            
+            if PSUTIL_AVAILABLE:
+                uptime = time.time() - psutil.boot_time()
+                system_info.update({
+                    'uptime_seconds': int(uptime),
+                    'uptime_formatted': self._format_uptime(uptime)
+                })
+            else:
+                system_info['uptime_note'] = 'psutil required for uptime info'
+                
+            return system_info
         except Exception as e:
             return {'error': str(e)}
     
     def _get_hardware_info(self) -> Dict[str, Any]:
         """Información del hardware"""
         try:
-            return {
+            hardware_info = {
                 'cpu_model': self._get_cpu_model(),
-                'cpu_cores': psutil.cpu_count(),
-                'cpu_usage': psutil.cpu_percent(interval=1),
-                'memory_total': psutil.virtual_memory().total,
-                'memory_used': psutil.virtual_memory().used,
-                'memory_percent': psutil.virtual_memory().percent,
-                'disk_usage': self._get_disk_usage(),
                 'temperature': self._get_cpu_temperature()
             }
+            
+            if PSUTIL_AVAILABLE:
+                hardware_info.update({
+                    'cpu_cores': psutil.cpu_count(),
+                    'cpu_usage': psutil.cpu_percent(interval=1),
+                    'memory_total': psutil.virtual_memory().total,
+                    'memory_used': psutil.virtual_memory().used,
+                    'memory_percent': psutil.virtual_memory().percent,
+                    'disk_usage': self._get_disk_usage()
+                })
+            else:
+                hardware_info['note'] = 'psutil required for detailed hardware info'
+                
+            return hardware_info
         except Exception as e:
             return {'error': str(e)}
     
@@ -138,23 +161,37 @@ class SystemInfoAPI:
                 'wifi_status': 'unknown'
             }
             
-            # Obtener interfaces de red
-            for interface, addrs in psutil.net_if_addrs().items():
-                interface_info = {
-                    'name': interface,
-                    'addresses': []
-                }
-                
-                for addr in addrs:
-                    if addr.family == 2:  # IPv4
-                        interface_info['addresses'].append({
-                            'type': 'IPv4',
-                            'address': addr.address,
-                            'netmask': addr.netmask
-                        })
-                
-                if interface_info['addresses']:  # Solo incluir si tiene direcciones IPv4
-                    network_info['interfaces'].append(interface_info)
+            if PSUTIL_AVAILABLE:
+                # Obtener interfaces de red con psutil
+                for interface, addrs in psutil.net_if_addrs().items():
+                    interface_info = {
+                        'name': interface,
+                        'addresses': []
+                    }
+                    
+                    for addr in addrs:
+                        if addr.family == 2:  # IPv4
+                            interface_info['addresses'].append({
+                                'type': 'IPv4',
+                                'address': addr.address,
+                                'netmask': addr.netmask
+                            })
+                    
+                    if interface_info['addresses']:  # Solo incluir si tiene direcciones IPv4
+                        network_info['interfaces'].append(interface_info)
+            else:
+                # Fallback usando comandos del sistema
+                try:
+                    result = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        ips = result.stdout.strip().split()
+                        for ip in ips:
+                            network_info['interfaces'].append({
+                                'name': 'unknown',
+                                'addresses': [{'type': 'IPv4', 'address': ip, 'netmask': 'unknown'}]
+                            })
+                except:
+                    network_info['note'] = 'psutil required for detailed network info'
             
             return network_info
             
@@ -164,14 +201,26 @@ class SystemInfoAPI:
     def _get_performance_info(self) -> Dict[str, Any]:
         """Información de rendimiento"""
         try:
-            return {
-                'cpu_percent': psutil.cpu_percent(interval=1),
-                'cpu_freq': psutil.cpu_freq().current if psutil.cpu_freq() else None,
-                'memory_percent': psutil.virtual_memory().percent,
-                'load_average': os.getloadavg(),
-                'processes': len(psutil.pids()),
-                'boot_time': psutil.boot_time()
-            }
+            performance_info = {}
+            
+            if PSUTIL_AVAILABLE:
+                performance_info.update({
+                    'cpu_percent': psutil.cpu_percent(interval=1),
+                    'cpu_freq': psutil.cpu_freq().current if psutil.cpu_freq() else None,
+                    'memory_percent': psutil.virtual_memory().percent,
+                    'processes': len(psutil.pids()),
+                    'boot_time': psutil.boot_time()
+                })
+            else:
+                performance_info['note'] = 'psutil required for performance info'
+            
+            # Load average disponible sin psutil en sistemas Unix
+            try:
+                performance_info['load_average'] = os.getloadavg()
+            except:
+                performance_info['load_average'] = None
+                
+            return performance_info
         except Exception as e:
             return {'error': str(e)}
     
@@ -198,13 +247,33 @@ class SystemInfoAPI:
     def _get_disk_usage(self) -> Dict[str, Any]:
         """Obtener uso de disco"""
         try:
-            disk = psutil.disk_usage('/')
-            return {
-                'total': disk.total,
-                'used': disk.used,
-                'free': disk.free,
-                'percent': (disk.used / disk.total) * 100
-            }
+            if PSUTIL_AVAILABLE:
+                disk = psutil.disk_usage('/')
+                return {
+                    'total': disk.total,
+                    'used': disk.used,
+                    'free': disk.free,
+                    'percent': (disk.used / disk.total) * 100
+                }
+            else:
+                # Fallback usando df
+                try:
+                    result = subprocess.run(['df', '-h', '/'], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        lines = result.stdout.strip().split('\n')
+                        if len(lines) >= 2:
+                            parts = lines[1].split()
+                            if len(parts) >= 5:
+                                return {
+                                    'total': parts[1],
+                                    'used': parts[2],
+                                    'free': parts[3],
+                                    'percent': parts[4],
+                                    'note': 'Using df command (human readable)'
+                                }
+                except:
+                    pass
+                return {'note': 'psutil required for detailed disk info'}
         except:
             return {}
     
