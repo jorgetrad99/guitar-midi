@@ -146,50 +146,38 @@ body {
     display: block;
 }
 
-/* Current Instrument Display */
+/* Current Instrument Display - Compact Version */
 .current-instrument {
-    text-align: center;
-    padding: 30px;
-    margin-bottom: 30px;
-    background: linear-gradient(135deg, var(--primary), var(--primary-light));
-    border-radius: 20px;
-    box-shadow: 0 8px 30px rgba(76, 175, 80, 0.3);
-    position: relative;
-    overflow: hidden;
-}
-
-.current-instrument::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-    animation: pulse 3s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 15px 20px;
+    margin: 20px;
+    background: var(--white-10);
+    border-radius: var(--border-radius-small);
+    box-shadow: var(--shadow-light);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--white-20);
 }
 
 .current-icon {
-    font-size: clamp(3.5rem, 8vw, 4.5rem);
-    margin-bottom: 15px;
-    position: relative;
-    z-index: 1;
+    font-size: 2rem;
+    flex-shrink: 0;
 }
 
 .current-name {
-    font-size: clamp(1.3rem, 4vw, 1.6rem);
-    font-weight: 700;
-    margin-bottom: 8px;
-    position: relative;
-    z-index: 1;
+    font-size: 1.1rem;
+    font-weight: 600;
+    flex-grow: 1;
+    text-align: left;
 }
 
 .current-pc {
-    font-size: 1rem;
-    opacity: 0.9;
+    font-size: 0.9rem;
+    opacity: 0.7;
     font-weight: 500;
-    position: relative;
-    z-index: 1;
+    flex-shrink: 0;
 }
 
 /* Panic Button */

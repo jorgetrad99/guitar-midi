@@ -74,7 +74,9 @@ def update_preset(preset_id):
 @api.route('/instruments/<int:pc>/activate', methods=['POST'])
 def activate_instrument(pc):
     """Activate a specific preset/instrument"""
+    print(f"🎹 API: Activando instrumento {pc}")  # Debug log
     success = api.guitar_midi._set_instrument(pc)
+    print(f"   Resultado: {'✅ Éxito' if success else '❌ Error'}")  # Debug log
     if success:
         # Emit WebSocket update
         if hasattr(api.guitar_midi, 'socketio') and api.guitar_midi.socketio:
@@ -92,6 +94,7 @@ def activate_instrument(pc):
 def update_effects():
     """Update effect parameters"""
     data = request.get_json()
+    print(f"🎛️ API: Efectos recibidos: {data}")  # Debug log
     if not data:
         return jsonify({'success': False, 'error': 'No data provided'}), 400
     
@@ -108,6 +111,7 @@ def update_effects():
                 continue
                 
             success = api.guitar_midi._set_effect(effect, value)
+            print(f"   {effect}: {value}% -> {'✅' if success else '❌'}")  # Debug log
             results.append({
                 'effect': effect, 
                 'value': value, 
