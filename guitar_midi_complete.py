@@ -531,7 +531,7 @@ class GuitarMIDIComplete:
                     if self.socketio:
                         self.socketio.emit('instrument_changed', {
                             'pc': pc_number,
-                            'name': self.instruments[pc_number]['name']
+                            'name': self.presets[pc_number]['name']
                         })
     
     def _set_instrument(self, pc: int) -> bool:
@@ -649,7 +649,7 @@ class GuitarMIDIComplete:
             if success and self.socketio:
                 self.socketio.emit('instrument_changed', {
                     'pc': pc,
-                    'name': self.instruments[pc]['name']
+                    'name': self.presets[pc]['name']
                 })
             return jsonify({'success': success, 'current_instrument': pc if success else None})
         
@@ -1117,7 +1117,7 @@ class GuitarMIDIComplete:
         print(f"📱 URL móvil: http://{ip}:5000")
         print(f"🔊 Audio: {self.audio_device or 'Automático'}")
         
-        current_name = self.instruments[self.current_instrument]['name']
+        current_name = self.presets[self.current_instrument]['name']
         print(f"🎹 Instrumento actual: {current_name} (PC {self.current_instrument})")
         
         print("\n📱 Para conectar desde celular:")
