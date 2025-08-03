@@ -75,6 +75,13 @@ def update_preset(preset_id):
 def activate_instrument(pc):
     """Activate a specific preset/instrument"""
     print(f"🎹 API: Activando instrumento {pc}")  # Debug log
+    print(f"   Presets disponibles: {list(api.guitar_midi.presets.keys())}")  # Debug presets
+    if pc in api.guitar_midi.presets:
+        preset_info = api.guitar_midi.presets[pc]
+        print(f"   Preset {pc} info: {preset_info}")
+    else:
+        print(f"   ❌ Preset {pc} NO EXISTE en presets")
+    
     success = api.guitar_midi._set_instrument(pc)
     print(f"   Resultado: {'✅ Éxito' if success else '❌ Error'}")  # Debug log
     if success:

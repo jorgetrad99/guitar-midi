@@ -768,13 +768,25 @@ ctl.!default {
     
     def _set_instrument(self, pc: int) -> bool:
         """Cambiar instrumento activo usando presets"""
-        print(f"🎹 _set_instrument llamado: preset {pc}")
+        print(f"🎹 _set_instrument llamado: preset {pc} (type: {type(pc)})")
+        print(f"   Presets disponibles: {list(self.presets.keys())} (types: {[type(k) for k in self.presets.keys()]})")
         try:
-            if pc not in self.presets:
-                print(f"   ❌ Preset {pc} no existe")
+            # Convertir pc a int si no lo es, y probar ambas formas
+            pc_int = int(pc)
+            pc_str = str(pc)
+            
+            preset = None
+            if pc_int in self.presets:
+                preset = self.presets[pc_int]
+                print(f"   ✅ Encontrado preset con clave int: {pc_int}")
+            elif pc_str in self.presets:
+                preset = self.presets[pc_str]
+                print(f"   ✅ Encontrado preset con clave str: {pc_str}")
+            else:
+                print(f"   ❌ Preset {pc} no existe (probé int {pc_int} y str '{pc_str}')")
                 return False
             
-            instrument = self.presets[pc]
+            instrument = preset
             print(f"   🎼 Cambiando a: {instrument['name']}")
             
             if not self.fs or self.sfid is None:
@@ -791,23 +803,26 @@ ctl.!default {
                 result = self.fs.program_select(channel, self.sfid, bank, program)
                 print(f"   🎹 program_select resultado: {result}")
                 
-                self.current_instrument = pc
-                print(f"   ✅ Instrumento cambiado a preset {pc}")
+                self.current_instrument = pc_int  # Usar la versión int
+                print(f"   ✅ Instrumento cambiado a preset {pc_int}")
+                
+                # Guardar en base de datos
+                try:
+                    with sqlite3.connect(self.db_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', 
+                                     ('current_instrument', str(pc_int)))
+                        conn.commit()
+                    print(f"   💾 Preset guardado en DB")
+                except Exception as db_e:
+                    print(f"   ⚠️  Error guardando preset en DB: {db_e}")
+                
+                print(f"🎹 Instrumento: {instrument['name']} (PC: {pc_int}) - ✅ COMPLETADO")
+                return True
+                
             except Exception as e:
                 print(f"   ❌ Error en program_select: {e}")
                 return False
-                
-                # Guardar en base de datos
-                with sqlite3.connect(self.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', 
-                                 ('current_instrument', str(pc)))
-                    conn.commit()
-                
-                print(f"🎹 Instrumento: {instrument['name']} (PC: {pc})")
-                return True
-            
-            return False
             
         except Exception as e:
             print(f"❌ Error cambiando instrumento: {e}")
