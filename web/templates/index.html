@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎸 Guitar-MIDI Complete</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎸</text></svg>">
+</head>
+<body>
+    <header class="header">
+        <h1 class="title">🎸 Guitar-MIDI Complete System</h1>
+        <div class="status" id="status">🔄 Inicializando...</div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+        <button class="nav-tab active" data-tab="presets">🎛️ Presets</button>
+        <button class="nav-tab" data-tab="effects">🔊 Efectos</button>
+        <button class="nav-tab" data-tab="info">ℹ️ Sistema</button>
+    </div>
+
+    <main class="main">
+        <!-- Current Instrument Display -->
+        <div class="current-instrument">
+            <div class="current-icon" id="currentIcon">🎹</div>
+            <div class="current-name" id="currentName">Cargando...</div>
+            <div class="current-pc">Preset <span id="currentPC">0</span></div>
+        </div>
+
+        <!-- Emergency Panic Button -->
+        <button class="panic-btn">🚨 PANIC - Detener Todo</button>
+
+        <!-- TAB: Presets -->
+        <div id="presets" class="tab-content active">
+            <div class="section">
+                <h2 class="section-title">
+                    🎛️ Presets Configurables
+                </h2>
+                <div class="preset-grid" id="presetGrid">
+                    <!-- Presets are loaded dynamically -->
+                    <div class="preset-btn loading">
+                        <div class="preset-number">0</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">1</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">2</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">3</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">4</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">5</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">6</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                    <div class="preset-btn loading">
+                        <div class="preset-number">7</div>
+                        <div class="preset-icon">🔄</div>
+                        <div class="preset-name">Cargando...</div>
+                    </div>
+                </div>
+                <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 15px;">
+                    💡 Usa las teclas 0-7 para cambio rápido, ✏️ para editar presets
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Effects -->
+        <div id="effects" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">🔊 Controles de Efectos</h2>
+                
+                <div class="control-item">
+                    <label class="control-label">🔊 Volumen Master</label>
+                    <input type="range" class="control-slider" data-effect="master_volume" 
+                           min="0" max="100" value="80">
+                    <div class="control-value" id="mastervolumeValue">80%</div>
+                </div>
+
+                <div class="control-item">
+                    <label class="control-label">🌊 Reverb Global</label>
+                    <input type="range" class="control-slider" data-effect="global_reverb" 
+                           min="0" max="100" value="50">
+                    <div class="control-value" id="globalreverbValue">50%</div>
+                </div>
+
+                <div class="control-item">
+                    <label class="control-label">🎵 Chorus Global</label>
+                    <input type="range" class="control-slider" data-effect="global_chorus" 
+                           min="0" max="100" value="30">
+                    <div class="control-value" id="globalchorusValue">30%</div>
+                </div>
+
+                <div class="control-item">
+                    <label class="control-label">🔧 Filtro Cutoff</label>
+                    <input type="range" class="control-slider" data-effect="global_cutoff" 
+                           min="0" max="100" value="64">
+                    <div class="control-value" id="globalcutoffValue">64%</div>
+                </div>
+
+                <div class="control-item">
+                    <label class="control-label">🎚️ Resonancia</label>
+                    <input type="range" class="control-slider" data-effect="global_resonance" 
+                           min="0" max="100" value="0">
+                    <div class="control-value" id="globalresonanceValue">0%</div>
+                </div>
+
+                <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 20px;">
+                    🎛️ Todos los efectos se aplican en tiempo real a todos los canales
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: System Info -->
+        <div id="info" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">ℹ️ Información del Sistema</h2>
+                <div style="line-height: 1.8;">
+                    <div class="mb-3">
+                        <h3 style="color: var(--primary); margin-bottom: 10px;">🎸 Guitar-MIDI Complete v2.0</h3>
+                        <p>Sistema profesional de síntesis MIDI en tiempo real</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <h4 style="color: var(--primary-light); margin-bottom: 8px;">⌨️ Atajos de Teclado</h4>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li style="padding: 4px 0;">• <strong>P</strong> = PANIC (detener todo el audio)</li>
+                            <li style="padding: 4px 0;">• <strong>0-7</strong> = Cambiar preset directamente</li>
+                            <li style="padding: 4px 0;">• <strong>ESC</strong> = Cerrar editor de presets</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <h4 style="color: var(--primary-light); margin-bottom: 8px;">🔧 Características</h4>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li style="padding: 4px 0;">• ✅ 8 presets completamente configurables</li>
+                            <li style="padding: 4px 0;">• ✅ Librería completa de instrumentos General MIDI</li>
+                            <li style="padding: 4px 0;">• ✅ Efectos globales en tiempo real (Reverb, Chorus, Filtros)</li>
+                            <li style="padding: 4px 0;">• ✅ Auto-conexión y monitoreo de dispositivos MIDI</li>
+                            <li style="padding: 4px 0;">• ✅ Interfaz web responsiva para móviles y desktop</li>
+                            <li style="padding: 4px 0;">• ✅ Hotspot WiFi integrado (Guitar-MIDI)</li>
+                            <li style="padding: 4px 0;">• ✅ Base de datos SQLite para persistencia</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <h4 style="color: var(--primary-light); margin-bottom: 8px;">🌐 Conectividad</h4>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li style="padding: 4px 0;">• <strong>WiFi:</strong> Guitar-MIDI</li>
+                            <li style="padding: 4px 0;">• <strong>Contraseña:</strong> guitarmidi2024</li>
+                            <li style="padding: 4px 0;">• <strong>URL Local:</strong> http://192.168.4.1:5000</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <h4 style="color: var(--primary-light); margin-bottom: 8px;">🎹 Arquitectura</h4>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li style="padding: 4px 0;">• <strong>Motor Audio:</strong> FluidSynth + SoundFont GM</li>
+                            <li style="padding: 4px 0;">• <strong>MIDI:</strong> RTMidi con auto-conexión</li>
+                            <li style="padding: 4px 0;">• <strong>Web:</strong> Flask + SocketIO + JavaScript ES6</li>
+                            <li style="padding: 4px 0;">• <strong>Almacenamiento:</strong> SQLite integrado</li>
+                        </ul>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 30px; padding: 20px; background: var(--white-05); border-radius: var(--border-radius);">
+                        <p style="margin-bottom: 10px;">🎸 <strong>Sistema Guitar-MIDI Complete</strong></p>
+                        <p style="font-size: 0.9rem; opacity: 0.8;">Desarrollado para músicos profesionales</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Preset Editor Modal -->
+    <div id="presetModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">📝 Editar Preset <span id="editingPresetNumber">0</span></h3>
+                <button class="close-btn" title="Cerrar editor">×</button>
+            </div>
+            
+            <div id="instrumentCategories">
+                <!-- Categories are loaded dynamically -->
+                <div class="text-center" style="padding: 40px 20px; opacity: 0.7;">
+                    <div style="font-size: 2rem; margin-bottom: 15px;">🔄</div>
+                    <p>Cargando instrumentos...</p>
+                    <p style="font-size: 0.9rem; margin-top: 10px;">Conectando con FluidSynth...</p>
+                </div>
+            </div>
+            
+            <button class="save-btn" disabled>💾 Selecciona un instrumento</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/preset-editor.js') }}"></script>
+    
+    <script>
+        // Log system info for debugging
+        console.log('🎸 Guitar-MIDI Complete System v2.0');
+        console.log('📱 Interfaz Web Cargada');
+        console.log('⌨️ Atajos: P=PANIC, 0-7=Presets, ESC=Cerrar');
+        console.log('🌐 URL:', window.location.href);
+    </script>
+</body>
+</html>
