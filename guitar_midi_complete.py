@@ -230,6 +230,42 @@ class GuitarMIDIComplete:
         self.instrument_extractor = None  # FluidSynth instrument extractor
         self._instrument_library_cache = None  # Cache for instrument library
         
+        # Sistema de controladores MIDI específicos
+        self.connected_controllers = {}  # device_name -> controller_info
+        self.controller_patterns = {
+            'mvave_pocket': ['MVAVE.*Pocket', 'Pocket.*MVAVE', 'MVAVE.*'],
+            'hexaphonic': ['HEX.*', 'Hexaphonic.*', 'Guitar.*Synth', '.*Hexaphonic.*'],
+            'midi_captain': ['.*Captain.*', 'Captain.*', 'Pico.*Captain.*', 'MIDI.*Captain.*']
+        }
+        
+        # Presets específicos por controlador
+        self.controller_presets = {
+            'mvave_pocket': {
+                0: {"name": "Standard Kit", "program": 0, "bank": 128, "channel": 9, "icon": "🥁"},
+                1: {"name": "Rock Kit", "program": 16, "bank": 128, "channel": 9, "icon": "🤘"},
+                2: {"name": "Electronic Kit", "program": 25, "bank": 128, "channel": 9, "icon": "🔊"},
+                3: {"name": "Jazz Kit", "program": 32, "bank": 128, "channel": 9, "icon": "🎷"}
+            },
+            'hexaphonic': {
+                0: {"name": "Synth Bass", "program": 38, "bank": 0, "channel": 0, "icon": "🎸"},
+                1: {"name": "String Ensemble", "program": 48, "bank": 0, "channel": 1, "icon": "🎻"},
+                2: {"name": "Lead Synth", "program": 80, "bank": 0, "channel": 2, "icon": "🎹"},
+                3: {"name": "Trumpet Section", "program": 56, "bank": 0, "channel": 3, "icon": "🎺"},
+                4: {"name": "Tenor Sax", "program": 66, "bank": 0, "channel": 4, "icon": "🎷"},
+                5: {"name": "Flute", "program": 73, "bank": 0, "channel": 5, "icon": "🪈"}
+            },
+            'midi_captain': {
+                0: {"name": "Rock Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🤘"},
+                1: {"name": "Jazz Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🎷"},
+                2: {"name": "Electronic Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🔊"},
+                3: {"name": "Classical Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🎻"},
+                4: {"name": "Funk Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🎸"},
+                5: {"name": "Ambient Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🌊"},
+                6: {"name": "Latin Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🪘"},
+                7: {"name": "Experimental Setup", "program": 0, "bank": 0, "channel": 15, "icon": "🚀"}
+            }
+        }
+        
         # Configurar manejadores de señales
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -625,7 +661,7 @@ ctl.!default {
                 print("   ⚠️  FluidSynth no encontrado para auto-conexión")
                 return
             
-            # Conectar cada dispositivo MIDI a FluidSynth
+            # Conectar cada dispositivo MIDI a FluidSynth y detectar controladores específicos
             connected_devices = []
             for client_num, device_name in midi_inputs:
                 try:
@@ -634,6 +670,11 @@ ctl.!default {
                     if result.returncode == 0:
                         connected_devices.append(device_name)
                         print(f"   ✅ Conectado: {device_name} -> FluidSynth")
+                        
+                        # Detectar tipo de controlador específico
+                        controller_type = self._detect_controller_type(device_name)
+                        if controller_type:
+                            self._register_controller(device_name, controller_type, client_num)
                     else:
                         print(f"   ⚠️  No se pudo conectar: {device_name}")
                 except Exception as e:
@@ -641,11 +682,104 @@ ctl.!default {
             
             if connected_devices:
                 print(f"   🎹 Auto-conectados {len(connected_devices)} dispositivos MIDI")
+                if self.connected_controllers:
+                    print(f"   🎛️ Controladores específicos detectados: {len(self.connected_controllers)}")
+                    for device, info in self.connected_controllers.items():
+                        print(f"      • {info['type'].replace('_', ' ').title()}: {device}")
             else:
                 print("   ⚠️  No se conectaron dispositivos MIDI automáticamente")
                 
         except Exception as e:
             print(f"❌ Error en auto-conexión MIDI: {e}")
+    
+    def _detect_controller_type(self, device_name: str) -> Optional[str]:
+        """Detectar tipo de controlador basado en el nombre del dispositivo"""
+        import re
+        
+        for controller_type, patterns in self.controller_patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, device_name, re.IGNORECASE):
+                    return controller_type
+        return None
+    
+    def _register_controller(self, device_name: str, controller_type: str, client_num: str):
+        """Registrar controlador específico detectado"""
+        try:
+            # Información del controlador
+            controller_info = {
+                'type': controller_type,
+                'client_num': client_num,
+                'current_preset': 0,
+                'presets': self.controller_presets.get(controller_type, {}),
+                'connected': True
+            }
+            
+            self.connected_controllers[device_name] = controller_info
+            
+            # Configurar presets iniciales del controlador en FluidSynth
+            self._setup_controller_presets(controller_type)
+            
+            print(f"   🎛️ Registrado: {controller_type.replace('_', ' ').title()} ({device_name})")
+            
+        except Exception as e:
+            print(f"❌ Error registrando controlador {device_name}: {e}")
+    
+    def _setup_controller_presets(self, controller_type: str):
+        """Configurar presets del controlador en FluidSynth"""
+        try:
+            if controller_type not in self.controller_presets:
+                return
+                
+            presets = self.controller_presets[controller_type]
+            for preset_id, preset_info in presets.items():
+                channel = preset_info['channel']
+                bank = preset_info['bank']  
+                program = preset_info['program']
+                
+                if self.fs and self.sfid is not None:
+                    # Configurar banco e instrumento
+                    self.fs.program_select(channel, self.sfid, bank, program)
+                    print(f"      Canal {channel}: {preset_info['name']} (Bank {bank}, Program {program})")
+            
+        except Exception as e:
+            print(f"❌ Error configurando presets de {controller_type}: {e}")
+    
+    def get_connected_controllers(self) -> Dict[str, Any]:
+        """Obtener información de controladores conectados"""
+        return {
+            'controllers': self.connected_controllers,
+            'count': len(self.connected_controllers),
+            'types': list(set(info['type'] for info in self.connected_controllers.values()))
+        }
+    
+    def _apply_channel_effect(self, channel: int, effect_name: str, value: int) -> bool:
+        """Aplicar efecto específico a un canal MIDI"""
+        try:
+            if not self.fs:
+                return False
+                
+            # Mapeo de efectos a Control Change messages
+            effect_cc_map = {
+                'volume': 7,
+                'reverb': 91,
+                'chorus': 93,
+                'cutoff': 74,
+                'resonance': 71,
+                'expression': 11,
+                'sustain': 64
+            }
+            
+            if effect_name in effect_cc_map:
+                cc_number = effect_cc_map[effect_name]
+                self.fs.cc(channel, cc_number, value)
+                print(f"   🎛️ Canal {channel}: {effect_name} = {value}")
+                return True
+                
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error aplicando efecto {effect_name} en canal {channel}: {e}")
+            return False
     
     def _monitor_midi_connections(self):
         """Monitorear y reconectar dispositivos MIDI dinámicamente"""
@@ -758,6 +892,7 @@ ctl.!default {
             if 0xC0 <= status <= 0xCF:
                 pc_number = msg[1]
                 if 0 <= pc_number <= 7:
+                    print(f"   ✅ MIDI: Program Change {pc_number}")  # Debug
                     self._set_instrument(pc_number)
                     # Notificar a clientes web
                     if self.socketio:
@@ -765,6 +900,13 @@ ctl.!default {
                             'pc': pc_number,
                             'name': self.presets[pc_number]['name']
                         })
+                else:
+                    print(f"   ❌ MIDI: PC {pc_number} fuera de rango (0-7)")  # Debug
+            # Otros mensajes MIDI
+            else:
+                print(f"   ℹ️  MIDI: Otro mensaje (status {status})")  # Debug
+        else:
+            print("   ⚠️  MIDI: Mensaje corto")  # Debug
     
     def _set_instrument(self, pc: int) -> bool:
         """Cambiar instrumento activo usando presets"""

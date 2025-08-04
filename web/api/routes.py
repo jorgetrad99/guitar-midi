@@ -172,3 +172,171 @@ def load_config():
             'success': False, 
             'error': f'Failed to load config: {str(e)}'
         }), 500
+
+# ============================================================================
+# NUEVAS APIs PARA CONTROLADORES ESPECÍFICOS
+# ============================================================================
+
+@api.route('/controllers', methods=['GET'])
+def get_controllers():
+    """Get all connected controllers"""
+    controllers_info = api.guitar_midi.get_connected_controllers()
+    return jsonify({
+        'success': True,
+        'controllers': controllers_info['controllers'],
+        'count': controllers_info['count'],
+        'types': controllers_info['types']
+    })
+
+@api.route('/controllers/<controller_name>/preset/<int:preset_id>', methods=['POST'])
+def set_controller_preset(controller_name, preset_id):
+    """Set preset for specific controller"""
+    if controller_name not in api.guitar_midi.connected_controllers:
+        return jsonify({
+            'success': False, 
+            'error': f'Controller {controller_name} not found'
+        }), 404
+    
+    controller_info = api.guitar_midi.connected_controllers[controller_name]
+    controller_type = controller_info['type']
+    
+    # Verificar que el preset existe para este controlador
+    if controller_type not in api.guitar_midi.controller_presets:
+        return jsonify({
+            'success': False, 
+            'error': f'No presets defined for controller type {controller_type}'
+        }), 400
+    
+    available_presets = api.guitar_midi.controller_presets[controller_type]
+    if preset_id not in available_presets:
+        return jsonify({
+            'success': False, 
+            'error': f'Preset {preset_id} not available for {controller_type}'
+        }), 400
+    
+    # Configurar preset en FluidSynth
+    preset_info = available_presets[preset_id]
+    success = False
+    
+    try:
+        if api.guitar_midi.fs and api.guitar_midi.sfid is not None:
+            channel = preset_info['channel']
+            bank = preset_info['bank']
+            program = preset_info['program']
+            
+            api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
+            
+            # Actualizar preset actual del controlador
+            api.guitar_midi.connected_controllers[controller_name]['current_preset'] = preset_id
+            success = True
+            
+            print(f"🎛️ {controller_type}: Preset {preset_id} ({preset_info['name']}) activado en canal {channel}")
+            
+    except Exception as e:
+        print(f"❌ Error activando preset: {e}")
+    
+    return jsonify({
+        'success': success,
+        'controller': controller_name,
+        'preset_id': preset_id,
+        'preset_name': preset_info['name'] if success else None
+    })
+
+@api.route('/controllers/<controller_name>/presets', methods=['GET'])
+def get_controller_presets(controller_name):
+    """Get presets for specific controller"""
+    if controller_name not in api.guitar_midi.connected_controllers:
+        return jsonify({
+            'success': False, 
+            'error': f'Controller {controller_name} not found'
+        }), 404
+    
+    controller_info = api.guitar_midi.connected_controllers[controller_name]
+    controller_type = controller_info['type']
+    
+    presets = api.guitar_midi.controller_presets.get(controller_type, {})
+    
+    return jsonify({
+        'success': True,
+        'controller': controller_name,
+        'controller_type': controller_type,
+        'current_preset': controller_info['current_preset'],
+        'presets': presets
+    })
+
+@api.route('/controllers/types', methods=['GET'])
+def get_controller_types():
+    """Get information about supported controller types"""
+    controller_types_info = {}
+    
+    for controller_type, presets in api.guitar_midi.controller_presets.items():
+        controller_types_info[controller_type] = {
+            'name': controller_type.replace('_', ' ').title(),
+            'preset_count': len(presets),
+            'channels': list(set(p['channel'] for p in presets.values())),
+            'patterns': api.guitar_midi.controller_patterns.get(controller_type, [])
+        }
+    
+    return jsonify({
+        'success': True,
+        'controller_types': controller_types_info
+    })
+
+@api.route('/controllers/<controller_name>/effects', methods=['POST'])
+def set_controller_effects(controller_name):
+    """Set effects for specific controller channels"""
+    if controller_name not in api.guitar_midi.connected_controllers:
+        return jsonify({
+            'success': False, 
+            'error': f'Controller {controller_name} not found'
+        }), 404
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    controller_info = api.guitar_midi.connected_controllers[controller_name]
+    controller_type = controller_info['type']
+    presets = api.guitar_midi.controller_presets.get(controller_type, {})
+    
+    results = []
+    
+    # Aplicar efectos a todos los canales del controlador
+    channels = list(set(p['channel'] for p in presets.values()))
+    
+    for effect_name, value in data.items():
+        try:
+            value = int(value)
+            if not (0 <= value <= 127):
+                results.append({
+                    'effect': effect_name,
+                    'success': False,
+                    'error': 'Value must be 0-127'
+                })
+                continue
+            
+            # Aplicar efecto a todos los canales del controlador
+            success_count = 0
+            for channel in channels:
+                if api.guitar_midi._apply_channel_effect(channel, effect_name, value):
+                    success_count += 1
+            
+            results.append({
+                'effect': effect_name,
+                'value': value,
+                'success': success_count > 0,
+                'channels_affected': success_count
+            })
+            
+        except (ValueError, TypeError):
+            results.append({
+                'effect': effect_name,
+                'success': False,
+                'error': 'Invalid value type'
+            })
+    
+    return jsonify({
+        'success': True,
+        'controller': controller_name,
+        'results': results
+    })
