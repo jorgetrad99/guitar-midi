@@ -1498,6 +1498,9 @@ ctl.!default {
                 self.active_controllers[device_name] = controller
                 print(f"      🎮 Controlador creado: Presets {device_info['preset_start']}-{device_info['preset_end']}, Canal {device_info['midi_channel']}")
                 
+                # INICIALIZAR con el primer preset para que suene inmediatamente
+                self._initialize_controller_preset(controller)
+                
         except Exception as e:
             print(f"   ❌ Error registrando dispositivo {device_name}: {e}")
     
@@ -1553,6 +1556,33 @@ ctl.!default {
         except Exception as e:
             print(f"   ❌ Error creando controlador simple: {e}")
             return None
+    
+    def _initialize_controller_preset(self, controller):
+        """Inicializar controlador con su primer preset activo"""
+        try:
+            device_info = controller['device_info']
+            presets = controller['presets']
+            
+            if not presets:
+                return
+            
+            # Tomar el primer preset disponible
+            first_preset_id = min(presets.keys())
+            first_preset = presets[first_preset_id]
+            
+            # Aplicar preset inmediatamente al FluidSynth
+            if self.fs and self.sfid is not None:
+                channel = device_info['midi_channel']
+                bank = first_preset.get('bank', 0)
+                program = first_preset.get('program', 0)
+                
+                self.fs.program_select(channel, self.sfid, bank, program)
+                controller['current_preset'] = first_preset_id
+                
+                print(f"      🎵 Preset inicial: {first_preset['name']} (Programa {program}, Canal {channel})")
+                
+        except Exception as e:
+            print(f"   ❌ Error inicializando preset: {e}")
     
     def _modular_callback(self, event_type: str, data: dict):
         """Callback para eventos del sistema modular"""

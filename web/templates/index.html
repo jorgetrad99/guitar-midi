@@ -16,12 +16,35 @@
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
         <button class="nav-tab active" data-tab="presets">🎛️ Presets</button>
-        <button class="nav-tab" data-tab="controllers">🎚️ Controladores</button>
         <button class="nav-tab" data-tab="effects">🔊 Efectos</button>
         <button class="nav-tab" data-tab="info">ℹ️ Sistema</button>
     </div>
 
-    <main class="main">
+    <main class="main-container">
+        <!-- Panel lateral de controladores -->
+        <aside class="controllers-sidebar">
+            <div class="sidebar-header">
+                <h3>🎚️ Controladores</h3>
+                <button class="refresh-controllers" title="Actualizar controladores">🔄</button>
+            </div>
+            
+            <div class="controllers-list" id="controllersList">
+                <div class="loading-controllers">
+                    <div>🔄</div>
+                    <p>Cargando...</p>
+                </div>
+            </div>
+            
+            <div class="selected-controller-presets" id="selectedControllerPresets">
+                <div class="no-controller-selected">
+                    <div>🎛️</div>
+                    <p>Selecciona un controlador</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Contenido principal -->
+        <main class="main">
         <!-- Current Instrument Display -->
         <div class="current-instrument">
             <div class="current-icon" id="currentIcon">🎹</div>
@@ -83,25 +106,6 @@
                 </div>
                 <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 15px;">
                     💡 Usa las teclas 0-7 para cambio rápido, ✏️ para editar presets
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB: Controllers -->
-        <div id="controllers" class="tab-content">
-            <div class="section">
-                <h2 class="section-title">🎚️ Controladores MIDI</h2>
-                
-                <div class="controllers-container" id="controllersContainer">
-                    <div class="text-center" style="padding: 40px 20px; opacity: 0.7;">
-                        <div style="font-size: 2rem; margin-bottom: 15px;">🔄</div>
-                        <p>Cargando controladores...</p>
-                        <p style="font-size: 0.9rem; margin-top: 10px;">Detectando dispositivos MIDI...</p>
-                    </div>
-                </div>
-                
-                <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 20px;">
-                    🎛️ Cada controlador tiene sus propios presets y configuración
                 </div>
             </div>
         </div>
@@ -210,6 +214,7 @@
                 </div>
             </div>
         </div>
+        </main>
     </main>
 
     <!-- Preset Editor Modal -->

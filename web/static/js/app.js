@@ -9,6 +9,10 @@ class GuitarMIDIApp {
         this.effects = {};
         this.isLoading = false;
         
+        // Control del panel lateral
+        this.selectedController = null;
+        this.controllers = {};
+        
         this.init();
     }
 
@@ -47,6 +51,12 @@ class GuitarMIDIApp {
                 this.updateEffect(effect, value);
             });
         });
+
+        // Refresh controllers button
+        const refreshBtn = document.querySelector('.refresh-controllers');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadControllers());
+        }
     }
 
     setupKeyboardShortcuts() {
@@ -89,7 +99,7 @@ class GuitarMIDIApp {
                 this.renderPresets();
                 this.updateCurrentInstrument();
                 this.updateEffectValues();
-                this.loadControllers();
+                this.loadControllersSidebar();
                 
                 this.showStatus('✅ Sistema cargado', 'success');
             } else {
@@ -116,10 +126,7 @@ class GuitarMIDIApp {
         });
         document.getElementById(tabName).classList.add('active');
         
-        // Load specific tab data if needed
-        if (tabName === 'controllers') {
-            this.loadControllers();
-        }
+        // No need to load controllers per tab anymore
     }
 
     renderPresets() {
@@ -362,9 +369,9 @@ class GuitarMIDIApp {
         }
     }
 
-    async loadControllers() {
+    async loadControllersSidebar() {
         try {
-            console.log('🎛️ JS: Cargando controladores...');
+            console.log('🎛️ JS: Cargando controladores en sidebar...');
             
             const response = await fetch('/api/controllers');
             const data = await response.json();
@@ -372,26 +379,26 @@ class GuitarMIDIApp {
             console.log('📋 JS: Controladores obtenidos:', data);
             
             if (data.success) {
-                this.renderControllers(data.controllers, data.types);
+                this.controllers = data.controllers;
+                this.renderControllersSidebar(data.controllers);
             } else {
-                this.renderControllersError('Error cargando controladores');
+                this.renderControllersSidebarError('Error cargando controladores');
             }
         } catch (error) {
             console.error('❌ JS: Error loading controllers:', error);
-            this.renderControllersError('Error de conexión');
+            this.renderControllersSidebarError('Error de conexión');
         }
     }
 
-    renderControllers(controllers, types) {
-        const container = document.getElementById('controllersContainer');
+    renderControllersSidebar(controllers) {
+        const container = document.getElementById('controllersList');
         if (!container) return;
 
         if (Object.keys(controllers).length === 0) {
             container.innerHTML = `
-                <div class="text-center" style="padding: 40px 20px; opacity: 0.7;">
-                    <div style="font-size: 2rem; margin-bottom: 15px;">🔌</div>
-                    <p>No hay controladores conectados</p>
-                    <p style="font-size: 0.9rem; margin-top: 10px;">Conecta un dispositivo MIDI para empezar</p>
+                <div class="loading-controllers">
+                    <div>🔌</div>
+                    <p>No hay controladores</p>
                 </div>
             `;
             return;
@@ -400,33 +407,172 @@ class GuitarMIDIApp {
         let html = '';
         Object.entries(controllers).forEach(([controllerName, controllerInfo]) => {
             const type = controllerInfo.type;
-            const typeInfo = types[type] || {};
+            const isActive = this.selectedController === controllerName;
             
             html += `
-                <div class="controller-card" data-controller="${controllerName}">
-                    <div class="controller-header">
-                        <div class="controller-icon">${this.getControllerIcon(type)}</div>
-                        <div class="controller-info">
-                            <h3 class="controller-name">${controllerName}</h3>
-                            <p class="controller-type">${typeInfo.name || type}</p>
-                        </div>
-                        <div class="controller-status ${controllerInfo.connected ? 'connected' : 'disconnected'}">
-                            ${controllerInfo.connected ? '✅' : '❌'}
-                        </div>
+                <div class="controller-item ${isActive ? 'active' : ''}" 
+                     data-controller="${controllerName}"
+                     onclick="window.guitarMIDIApp.selectController('${controllerName}')">
+                    <div class="controller-icon">${this.getControllerIcon(type)}</div>
+                    <div class="controller-info">
+                        <div class="controller-name">${controllerName}</div>
+                        <div class="controller-type">${type.replace('_', ' ')}</div>
                     </div>
-                    <div class="controller-presets" id="presets-${controllerName}">
-                        <div class="loading">Cargando presets...</div>
+                    <div class="controller-status">
+                        ${controllerInfo.connected ? '✅' : '❌'}
                     </div>
                 </div>
             `;
         });
 
         container.innerHTML = html;
+    }
 
-        // Load presets for each controller
-        Object.keys(controllers).forEach(controllerName => {
-            this.loadControllerPresets(controllerName);
+    renderControllersSidebarError(message) {
+        const container = document.getElementById('controllersList');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="loading-controllers">
+                <div>❌</div>
+                <p>${message}</p>
+                <button onclick="window.guitarMIDIApp.loadControllersSidebar()" 
+                        style="margin-top: 10px; padding: 6px 12px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    🔄 Reintentar
+                </button>
+            </div>
+        `;
+    }
+
+    async selectController(controllerName) {
+        try {
+            console.log(`🎛️ JS: Seleccionando controlador: ${controllerName}`);
+            
+            this.selectedController = controllerName;
+            
+            // Actualizar UI para mostrar el controlador seleccionado
+            this.renderControllersSidebar(this.controllers);
+            
+            // Cargar presets del controlador seleccionado
+            await this.loadSelectedControllerPresets(controllerName);
+            
+        } catch (error) {
+            console.error('❌ JS: Error selecting controller:', error);
+        }
+    }
+
+    async loadSelectedControllerPresets(controllerName) {
+        try {
+            const container = document.getElementById('selectedControllerPresets');
+            if (!container) return;
+            
+            // Mostrar loading
+            container.innerHTML = `
+                <div class="loading-controllers">
+                    <div>🔄</div>
+                    <p>Cargando presets...</p>
+                </div>
+            `;
+            
+            const response = await fetch(`/api/controllers/${controllerName}/presets`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.renderSelectedControllerPresets(controllerName, data.presets, data.current_preset);
+            } else {
+                container.innerHTML = `
+                    <div class="loading-controllers">
+                        <div>❌</div>
+                        <p>Error: ${data.error}</p>
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            console.error(`❌ JS: Error loading presets for ${controllerName}:`, error);
+            const container = document.getElementById('selectedControllerPresets');
+            if (container) {
+                container.innerHTML = `
+                    <div class="loading-controllers">
+                        <div>❌</div>
+                        <p>Error de conexión</p>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    renderSelectedControllerPresets(controllerName, presets, currentPreset) {
+        const container = document.getElementById('selectedControllerPresets');
+        if (!container) return;
+
+        if (Object.keys(presets).length === 0) {
+            container.innerHTML = `
+                <div class="no-controller-selected">
+                    <div>🎛️</div>
+                    <p>Sin presets</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `<h4 style="margin-bottom: 15px; color: var(--primary);">Presets - ${controllerName}</h4>`;
+        
+        Object.entries(presets).forEach(([presetId, presetInfo]) => {
+            const isActive = parseInt(presetId) === currentPreset;
+            
+            html += `
+                <div class="preset-item ${isActive ? 'active' : ''}" 
+                     onclick="window.guitarMIDIApp.setControllerPreset('${controllerName}', ${presetId})">
+                    <div class="preset-number">${presetId}</div>
+                    <div class="preset-info">
+                        <div class="preset-name">${presetInfo.name || 'Preset ' + presetId}</div>
+                        <div class="preset-details">Programa ${presetInfo.program || 0}</div>
+                    </div>
+                    <button class="preset-edit" 
+                            onclick="event.stopPropagation(); window.guitarMIDIApp.editControllerPreset('${controllerName}', ${presetId})"
+                            title="Editar preset">
+                        ✏️
+                    </button>
+                </div>
+            `;
         });
+
+        container.innerHTML = html;
+    }
+
+    async setControllerPreset(controllerName, presetId) {
+        try {
+            console.log(`🎛️ JS: Activando preset ${presetId} en controlador ${controllerName}`);
+            
+            const response = await fetch(`/api/controllers/${controllerName}/preset/${presetId}`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showStatus(`✅ ${controllerName}: ${data.preset_name}`, 'success');
+                // Recargar presets para actualizar el estado activo
+                this.loadSelectedControllerPresets(controllerName);
+            } else {
+                this.showStatus(`❌ Error: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('❌ JS: Error setting controller preset:', error);
+            this.showStatus('❌ Error de conexión', 'error');
+        }
+    }
+
+    editControllerPreset(controllerName, presetId) {
+        // TODO: Implementar editor de presets para controladores
+        console.log(`✏️ JS: Editando preset ${presetId} de ${controllerName}`);
+        this.showStatus('🔧 Editor de presets en desarrollo', 'warning');
+    }
+
+    // Mantener función para compatibilidad (llamará a la nueva)
+    async loadControllers() {
+        return this.loadControllersSidebar();
     }
 
     renderControllersError(message) {
