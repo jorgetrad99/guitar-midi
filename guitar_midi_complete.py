@@ -46,6 +46,11 @@ class GuitarMIDIComplete:
         self.is_running = False
         self.current_instrument = 0
         
+        # Sistema modular (NUEVO)
+        self.modular_system = None
+        self.device_manager = None
+        self.active_controllers = {}
+        
         # Base de datos SQLite integrada
         self.db_path = "guitar_midi.db"
         self._init_database()
@@ -1328,14 +1333,17 @@ ctl.!default {
             # 5. Inicializar servidor web
             self._init_web_server()
             
-            # 6. Iniciar monitoreo MIDI en hilo separado
+            # 6. Inicializar sistema modular (NUEVO)
+            self._init_modular_system()
+            
+            # 7. Iniciar monitoreo MIDI en hilo separado
             midi_monitor_thread = threading.Thread(target=self._monitor_midi_connections, daemon=True)
             midi_monitor_thread.start()
             
-            # 7. Mostrar información del sistema
+            # 8. Mostrar información del sistema
             self._show_system_info()
             
-            # 8. Ejecutar servidor (bloqueante)
+            # 9. Ejecutar servidor (bloqueante)
             self.is_running = True
             print("🌐 Servidor web iniciando...")
             self.socketio.run(self.app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
@@ -1391,6 +1399,184 @@ ctl.!default {
         print("\n⌨️  Atajos: P=PANIC, 0-7=Instrumentos")
         print("🔴 Ctrl+C para detener")
         print("="*60 + "\n")
+    
+    # ============================================================================
+    # SISTEMA MODULAR - NUEVOS MÉTODOS
+    # ============================================================================
+    
+    def _init_modular_system(self):
+        """Inicializar el sistema modular de detección de dispositivos"""
+        try:
+            print("🔌 Inicializando sistema modular...")
+            
+            # Importar módulos del sistema modular
+            try:
+                from modules.device_manager import DeviceManager
+                print("   ✅ DeviceManager importado")
+            except ImportError as e:
+                print(f"   ⚠️ Sistema modular no disponible: {e}")
+                return
+            
+            # Crear DeviceManager con callback
+            self.device_manager = DeviceManager(main_system_callback=self._modular_callback)
+            
+            # Iniciar monitoreo
+            self.device_manager.start_monitoring()
+            
+            print("   ✅ Sistema modular iniciado")
+            
+        except Exception as e:
+            print(f"   ❌ Error inicializando sistema modular: {e}")
+    
+    def _modular_callback(self, event_type: str, data: dict):
+        """Callback para eventos del sistema modular"""
+        try:
+            if event_type == 'midi_device_connected':
+                device_name = data.get('name', 'Unknown')
+                device_type = data.get('type', 'unknown')
+                print(f"🎛️ Dispositivo MIDI conectado: {device_name} ({device_type})")
+                
+                # Crear controlador específico
+                controller = self._create_modular_controller(device_name, device_type, data)
+                if controller:
+                    controller.activate()
+                    self.active_controllers[device_name] = controller
+                    print(f"   ✅ Controlador {device_name} activado")
+                    
+            elif event_type == 'midi_device_disconnected':
+                if data and 'name' in data:
+                    device_name = data['name']
+                    if device_name in self.active_controllers:
+                        self.active_controllers[device_name].deactivate()
+                        del self.active_controllers[device_name]
+                        print(f"🔌 Controlador {device_name} desactivado")
+                        
+            elif event_type == 'audio_device_connected':
+                device_name = data.get('name', 'Unknown')
+                device_type = data.get('type', 'unknown')
+                print(f"🎤 Dispositivo de audio conectado: {device_name} ({device_type})")
+                
+        except Exception as e:
+            print(f"❌ Error en callback modular: {e}")
+    
+    def _create_modular_controller(self, device_name: str, device_type: str, device_info: dict):
+        """Crear controlador específico según el tipo"""
+        try:
+            if device_type == 'akai_mpk_mini':
+                from modules.controllers.akai_mpk_mini import AkaiMPKMiniController
+                return AkaiMPKMiniController(device_name, device_info, self._controller_callback)
+            elif device_type == 'fishman_tripleplay':
+                from modules.controllers.fishman_tripleplay import FishmanTriplePlayController
+                return FishmanTriplePlayController(device_name, device_info, self._controller_callback)
+            else:
+                # Dispositivos ya manejados por el sistema original
+                return None
+                
+        except ImportError as e:
+            print(f"   ⚠️ Controlador {device_type} no disponible: {e}")
+            return None
+        except Exception as e:
+            print(f"   ❌ Error creando controlador {device_type}: {e}")
+            return None
+    
+    def _controller_callback(self, event_type: str, data: dict):
+        """Callback para eventos de controladores específicos"""
+        try:
+            if event_type == 'midi_note':
+                self._handle_modular_note(data)
+            elif event_type == 'midi_cc':
+                self._handle_modular_cc(data)
+            elif event_type == 'apply_preset':
+                return self._handle_modular_preset(data)
+            elif event_type == 'preset_changed':
+                controller = data.get('controller', 'Unknown')
+                preset_id = data.get('new_preset', 0)
+                preset_info = data.get('preset_info', {})
+                print(f"🔄 {controller}: Preset → {preset_id} ({preset_info.get('name', 'Sin nombre')})")
+                
+        except Exception as e:
+            print(f"❌ Error en callback de controlador: {e}")
+    
+    def _handle_modular_note(self, data: dict):
+        """Manejar nota MIDI de controlador modular"""
+        try:
+            note_type = data.get('type')
+            note = data.get('note')
+            velocity = data.get('velocity')
+            channel = data.get('channel', 0)
+            controller = data.get('controller', 'Unknown')
+            
+            if self.fs:
+                if note_type == 'note_on' and velocity > 0:
+                    self.fs.noteon(channel, note, velocity)
+                else:
+                    self.fs.noteoff(channel, note)
+                    
+                print(f"🎵 {controller}: Nota {note} {'ON' if note_type == 'note_on' else 'OFF'} (canal {channel})")
+                
+        except Exception as e:
+            print(f"❌ Error manejando nota modular: {e}")
+    
+    def _handle_modular_cc(self, data: dict):
+        """Manejar Control Change de controlador modular"""
+        try:
+            cc_number = data.get('cc_number')
+            value = data.get('value')
+            channel = data.get('channel', 0)
+            controller = data.get('controller', 'Unknown')
+            
+            if self.fs:
+                self.fs.cc(channel, cc_number, value)
+                print(f"🎛️ {controller}: CC{cc_number} = {value} (canal {channel})")
+                
+        except Exception as e:
+            print(f"❌ Error manejando CC modular: {e}")
+    
+    def _handle_modular_preset(self, data: dict):
+        """Manejar aplicación de preset modular"""
+        try:
+            channel = data.get('channel', 0)
+            program = data.get('program', 0)
+            bank = data.get('bank', 0)
+            controller = data.get('controller', 'Unknown')
+            
+            if self.fs and self.sfid is not None:
+                self.fs.program_select(channel, self.sfid, bank, program)
+                print(f"🎛️ {controller}: Preset aplicado - Canal {channel}, Programa {program}")
+                return True
+                
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error aplicando preset modular: {e}")
+            return False
+    
+    def get_modular_status(self):
+        """Obtener estado del sistema modular para la API"""
+        try:
+            status = {
+                'modular_active': self.device_manager is not None and self.device_manager.is_running,
+                'controllers': {},
+                'devices': {}
+            }
+            
+            # Estado de controladores activos
+            for name, controller in self.active_controllers.items():
+                try:
+                    status['controllers'][name] = controller.get_status()
+                except:
+                    status['controllers'][name] = {'error': 'No disponible'}
+            
+            # Estado de dispositivos si está disponible
+            if self.device_manager:
+                devices_info = self.device_manager.get_all_registered_devices()
+                status['devices'] = devices_info
+            
+            return status
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo estado modular: {e}")
+            return {'error': str(e)}
 
 def main():
     """Función principal"""

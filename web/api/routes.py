@@ -179,14 +179,43 @@ def load_config():
 
 @api.route('/controllers', methods=['GET'])
 def get_controllers():
-    """Get all connected controllers"""
-    controllers_info = api.guitar_midi.get_connected_controllers()
-    return jsonify({
-        'success': True,
-        'controllers': controllers_info['controllers'],
-        'count': controllers_info['count'],
-        'types': controllers_info['types']
-    })
+    """Get all connected controllers (original + modular)"""
+    try:
+        # Controladores originales
+        controllers_info = api.guitar_midi.get_connected_controllers()
+        
+        # Controladores modulares
+        modular_status = api.guitar_midi.get_modular_status()
+        
+        # Combinar ambos sistemas
+        all_controllers = controllers_info['controllers'].copy()
+        
+        # Agregar controladores modulares
+        for name, controller_status in modular_status.get('controllers', {}).items():
+            all_controllers[name] = {
+                'type': controller_status.get('device_type', 'modular'),
+                'connected': controller_status.get('is_active', False),
+                'current_preset': controller_status.get('current_preset', 0),
+                'modular': True  # Marcar como modular
+            }
+        
+        return jsonify({
+            'success': True,
+            'controllers': all_controllers,
+            'count': len(all_controllers),
+            'types': list(set([c.get('type', 'unknown') for c in all_controllers.values()])),
+            'modular_active': modular_status.get('modular_active', False)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error obteniendo controladores: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'controllers': {},
+            'count': 0,
+            'types': []
+        })
 
 @api.route('/controllers/<controller_name>/preset/<int:preset_id>', methods=['POST'])
 def set_controller_preset(controller_name, preset_id):
