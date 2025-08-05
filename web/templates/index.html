@@ -33,57 +33,27 @@
         <!-- Emergency Panic Button -->
         <button class="panic-btn">🚨 PANIC - Detener Todo</button>
 
-        <!-- TAB: Presets -->
+        <!-- TAB: Presets (Dynamic) -->
         <div id="presets" class="tab-content active">
             <div class="section">
-                <h2 class="section-title">
-                    🎛️ Presets Configurables
-                </h2>
-                <div class="preset-grid" id="presetGrid">
-                    <!-- Presets are loaded dynamically -->
-                    <div class="preset-btn loading">
-                        <div class="preset-number">0</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
+                <div id="dynamicPresetsContent">
+                    <!-- Default view when no controller selected -->
+                    <div id="defaultPresetsView">
+                        <h2 class="section-title">
+                            🎛️ Presets del Sistema
+                        </h2>
+                        <div class="preset-grid" id="presetGrid">
+                            <!-- System presets loaded dynamically -->
+                        </div>
+                        <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 15px;">
+                            💡 Usa las teclas 0-7 para cambio rápido, o selecciona un controlador
+                        </div>
                     </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">1</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
+                    
+                    <!-- Controller specific view when controller selected -->
+                    <div id="controllerPresetsView" style="display: none;">
+                        <!-- Content filled dynamically -->
                     </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">2</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
-                    </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">3</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
-                    </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">4</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
-                    </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">5</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
-                    </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">6</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
-                    </div>
-                    <div class="preset-btn loading">
-                        <div class="preset-number">7</div>
-                        <div class="preset-icon">🔄</div>
-                        <div class="preset-name">Cargando...</div>
-                    </div>
-                </div>
-                <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 15px;">
-                    💡 Usa las teclas 0-7 para cambio rápido, ✏️ para editar presets
                 </div>
             </div>
         </div>

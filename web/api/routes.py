@@ -288,7 +288,11 @@ def _set_original_controller_preset(controller_name, preset_id):
             bank = preset_info['bank']
             program = preset_info['program']
             
-            api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
+            result = api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
+            print(f"   🎹 program_select resultado: {result}")
+            
+            # Aplicar efectos después del cambio de preset
+            api.guitar_midi._apply_current_effects()
             
             # Actualizar preset actual del controlador
             api.guitar_midi.connected_controllers[controller_name]['current_preset'] = preset_id
@@ -329,7 +333,11 @@ def _set_modular_controller_preset(controller_name, preset_id):
             program = preset_info.get('program', 0)
             
             # Aplicar preset en FluidSynth
-            api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
+            result = api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
+            print(f"   🎹 program_select resultado: {result}")
+            
+            # Aplicar efectos después del cambio de preset
+            api.guitar_midi._apply_current_effects()
             
             # Actualizar preset actual del controlador
             controller['current_preset'] = preset_id

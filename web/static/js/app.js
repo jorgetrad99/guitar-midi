@@ -101,6 +101,9 @@ class GuitarMIDIApp {
                 this.updateEffectValues();
                 this.loadControllersSidebar();
                 
+                // Asegurar que está en vista del sistema al inicio
+                this.showSystemPresets();
+                
                 this.showStatus('✅ Sistema cargado', 'success');
             } else {
                 throw new Error('Failed to load system data');
@@ -174,27 +177,28 @@ class GuitarMIDIApp {
         }
 
         try {
-            console.log(`🎹 JS: Activando preset ${pc} (${preset.name})`);
+            console.log(`🎹 JS: Activando preset del sistema ${pc} (${preset.name})`);
             this.setLoading(true);
 
             const response = await fetch(`/api/instruments/${pc}/activate`, {
                 method: 'POST'
             });
             
-            console.log('📥 JS: Respuesta cambio instrumento, status:', response.status);
+            console.log('📥 JS: Respuesta cambio instrumento del sistema, status:', response.status);
             const data = await response.json();
-            console.log('📋 JS: Resultado cambio instrumento:', data);
+            console.log('📋 JS: Resultado cambio instrumento del sistema:', data);
 
             if (data.success) {
                 this.currentInstrument = pc;
                 this.updateCurrentInstrument();
                 this.updatePresetButtons();
-                this.showStatus(`✅ ${preset.name} activado`, 'success');
+                this.showStatus(`✅ Sistema: ${preset.name} activado`, 'success');
             } else {
-                this.showStatus('❌ Error activando preset', 'error');
+                this.showStatus('❌ Error activando preset del sistema', 'error');
+                console.error('Error details:', data);
             }
         } catch (error) {
-            console.error('❌ JS: Error changing instrument:', error);
+            console.error('❌ JS: Error changing system instrument:', error);
             this.showStatus('❌ Error de conexión', 'error');
         } finally {
             this.setLoading(false);
@@ -453,9 +457,11 @@ class GuitarMIDIApp {
             // Actualizar UI para mostrar el controlador seleccionado
             this.renderControllersSidebar(this.controllers);
             
-            // Cambiar a la pestaña de presets del controlador y mostrar presets grandes
-            this.showTab('controller-presets');
-            await this.loadControllerPresetsLarge(controllerName);
+            // Cambiar la vista de presets para mostrar los del controlador
+            await this.showControllerPresets(controllerName);
+            
+            // Asegurarse de que estamos en la pestaña de presets
+            this.showTab('presets');
             
         } catch (error) {
             console.error('❌ JS: Error selecting controller:', error);
@@ -811,6 +817,178 @@ class GuitarMIDIApp {
             'midi_captain': '🎚️'
         };
         return icons[type] || '🎛️';
+    }
+
+    async showControllerPresets(controllerName) {
+        try {
+            console.log(`🎛️ JS: Mostrando presets de controlador: ${controllerName}`);
+            
+            // Ocultar vista por defecto y mostrar vista de controlador
+            const defaultView = document.getElementById('defaultPresetsView');
+            const controllerView = document.getElementById('controllerPresetsView');
+            
+            if (defaultView) defaultView.style.display = 'none';
+            if (controllerView) controllerView.style.display = 'block';
+            
+            // Cargar presets del controlador
+            await this.loadControllerPresetsInMainView(controllerName);
+            
+        } catch (error) {
+            console.error('❌ JS: Error showing controller presets:', error);
+        }
+    }
+
+    showSystemPresets() {
+        try {
+            console.log('🎛️ JS: Mostrando presets del sistema');
+            
+            // Mostrar vista por defecto y ocultar vista de controlador
+            const defaultView = document.getElementById('defaultPresetsView');
+            const controllerView = document.getElementById('controllerPresetsView');
+            
+            if (defaultView) defaultView.style.display = 'block';
+            if (controllerView) controllerView.style.display = 'none';
+            
+            // Limpiar controlador seleccionado
+            this.selectedController = null;
+            this.renderControllersSidebar(this.controllers);
+            
+        } catch (error) {
+            console.error('❌ JS: Error showing system presets:', error);
+        }
+    }
+
+    async loadControllerPresetsInMainView(controllerName) {
+        try {
+            const container = document.getElementById('controllerPresetsView');
+            if (!container) return;
+            
+            // Mostrar loading
+            container.innerHTML = `
+                <div class="loading-controllers">
+                    <div>🔄</div>
+                    <p>Cargando presets de ${controllerName}...</p>
+                </div>
+            `;
+            
+            const response = await fetch(`/api/controllers/${controllerName}/presets`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.renderControllerPresetsInMainView(controllerName, data.presets, data.current_preset, data.controller_type);
+            } else {
+                container.innerHTML = `
+                    <div class="loading-controllers">
+                        <div>❌</div>
+                        <p>Error: ${data.error}</p>
+                        <button onclick="window.guitarMIDIApp.loadControllerPresetsInMainView('${controllerName}')" 
+                                style="margin-top: 10px; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            🔄 Reintentar
+                        </button>
+                    </div>
+                `;
+            }
+            
+        } catch (error) {
+            console.error(`❌ JS: Error loading presets for ${controllerName}:`, error);
+            const container = document.getElementById('controllerPresetsView');
+            if (container) {
+                container.innerHTML = `
+                    <div class="loading-controllers">
+                        <div>❌</div>
+                        <p>Error de conexión</p>
+                        <button onclick="window.guitarMIDIApp.loadControllerPresetsInMainView('${controllerName}')" 
+                                style="margin-top: 10px; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            🔄 Reintentar
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    renderControllerPresetsInMainView(controllerName, presets, currentPreset, controllerType) {
+        const container = document.getElementById('controllerPresetsView');
+        if (!container) return;
+
+        if (Object.keys(presets).length === 0) {
+            container.innerHTML = `
+                <h2 class="section-title">
+                    ${this.getControllerIcon(controllerType)} ${controllerName} - Sin Presets
+                </h2>
+                <div class="no-controller-selected-main">
+                    <div class="empty-state">
+                        <div class="empty-icon">🎛️</div>
+                        <h3>Sin Presets</h3>
+                        <p>Este controlador no tiene presets configurados</p>
+                        <button onclick="window.guitarMIDIApp.showSystemPresets()" 
+                                style="margin-top: 15px; padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                            🔙 Ver Presets del Sistema
+                        </button>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <h2 class="section-title">
+                ${this.getControllerIcon(controllerType)} Presets - ${controllerName}
+                <button onclick="window.guitarMIDIApp.showSystemPresets()" 
+                        style="float: right; padding: 8px 16px; background: var(--secondary); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                    🔙 Sistema
+                </button>
+            </h2>
+            <div class="preset-grid">
+        `;
+        
+        Object.entries(presets).forEach(([presetId, presetInfo]) => {
+            const isActive = parseInt(presetId) === currentPreset;
+            
+            html += `
+                <div class="preset-btn ${isActive ? 'active' : ''}" 
+                     onclick="window.guitarMIDIApp.setControllerPresetMain('${controllerName}', ${presetId})">
+                    <div class="preset-number">${presetId}</div>
+                    <button class="edit-btn" data-preset="${presetId}" 
+                            onclick="event.stopPropagation(); window.guitarMIDIApp.editControllerPreset('${controllerName}', ${presetId})"
+                            title="Editar preset">✏️</button>
+                    <div class="preset-icon">${presetInfo.icon || '🎵'}</div>
+                    <div class="preset-name">${presetInfo.name || 'Preset ' + presetId}</div>
+                </div>
+            `;
+        });
+
+        html += `
+            </div>
+            <div class="text-center" style="opacity: 0.8; font-size: 0.9rem; margin-top: 20px;">
+                💡 Presets del controlador ${controllerName} - ${Object.keys(presets).length} disponibles
+            </div>
+        `;
+
+        container.innerHTML = html;
+    }
+
+    async setControllerPresetMain(controllerName, presetId) {
+        try {
+            console.log(`🎛️ JS: Activando preset ${presetId} en controlador ${controllerName} (main view)`);
+            
+            const response = await fetch(`/api/controllers/${controllerName}/preset/${presetId}`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showStatus(`✅ ${controllerName}: ${data.preset_name}`, 'success');
+                // Recargar presets para actualizar el estado activo
+                this.loadControllerPresetsInMainView(controllerName);
+            } else {
+                this.showStatus(`❌ Error: ${data.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('❌ JS: Error setting controller preset:', error);
+            this.showStatus('❌ Error de conexión', 'error');
+        }
     }
 }
 

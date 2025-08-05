@@ -1250,8 +1250,52 @@ ctl.!default {
         """Aplicar todos los efectos actuales (útil después de cambio de instrumento)"""
         try:
             print("🎛️ Aplicando efectos actuales...")
+            if not self.fs:
+                print("   ❌ FluidSynth no inicializado")
+                return
+            
+            # Aplicar efectos directamente usando Control Changes para evitar recursión
             for effect_name, value in self.effects.items():
-                self._set_effect(effect_name, value)
+                if effect_name == 'master_volume':
+                    volume_cc = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        try:
+                            self.fs.cc(channel, 7, volume_cc)  # CC 7 = Main Volume
+                        except:
+                            pass
+                            
+                elif effect_name == 'global_reverb':
+                    reverb_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        try:
+                            self.fs.cc(channel, 91, reverb_value)  # CC 91 = Reverb Send
+                        except:
+                            pass
+                            
+                elif effect_name == 'global_chorus':
+                    chorus_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        try:
+                            self.fs.cc(channel, 93, chorus_value)  # CC 93 = Chorus Send
+                        except:
+                            pass
+                            
+                elif effect_name == 'global_cutoff':
+                    cutoff_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        try:
+                            self.fs.cc(channel, 74, cutoff_value)  # CC 74 = Brightness
+                        except:
+                            pass
+                            
+                elif effect_name == 'global_resonance':
+                    resonance_value = int((value / 100.0) * 127)
+                    for channel in range(16):
+                        try:
+                            self.fs.cc(channel, 71, resonance_value)  # CC 71 = Resonance
+                        except:
+                            pass
+            
             print("✅ Efectos actuales aplicados")
         except Exception as e:
             print(f"❌ Error aplicando efectos actuales: {e}")
