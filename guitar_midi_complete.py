@@ -1294,34 +1294,62 @@ ctl.!default {
                         pass
     
     def _set_instrument(self, pc: int) -> bool:
-        """Cambiar instrumento activo usando presets - OPTIMIZADO PARA BAJA LATENCIA"""
+        """Cambiar instrumento activo usando presets - CORREGIDO Y OPTIMIZADO"""
         try:
             # 🚀 Validación rápida
             pc_int = int(pc)
             if pc_int not in self.presets:
+                print(f"   ❌ Preset {pc_int} no existe en sistema principal")
                 return False
             
             # 🚀 Verificación rápida de FluidSynth
             if not self.fs or self.sfid is None:
+                print("   ❌ FluidSynth no inicializado")
                 return False
             
             # 🚀 Obtener preset y aplicar inmediatamente
             preset = self.presets[pc_int]
+            channel = preset['channel']
+            bank = preset['bank']
+            program = preset['program']
             
-            # 🚀 Program Change directo - sin logging para velocidad
-            result = self.fs.program_select(preset['channel'], self.sfid, preset['bank'], preset['program'])
+            print(f"   🎹 Sistema principal: Canal={channel}, Bank={bank}, Program={program}")
+            
+            # 🚀 MÉTODO MÚLTIPLE para asegurar que funcione
+            # 1. Program Select
+            result = self.fs.program_select(channel, self.sfid, bank, program)
+            print(f"   🎹 program_select resultado: {result}")
             
             if result == 0:  # Success
+                # 2. Program Change adicional para asegurar
+                try:
+                    self.fs.program_change(channel, program)
+                    print(f"   📨 Program Change enviado: Canal {channel}, Programa {program}")
+                except:
+                    pass
+                
+                # 3. Nota de prueba para activar el sonido
+                try:
+                    self.fs.noteon(channel, 60, 80)  # Nota C4
+                    time.sleep(0.05)  # Muy breve para no molestar
+                    self.fs.noteoff(channel, 60)
+                    print(f"   🎵 Nota de prueba: Canal {channel}")
+                except:
+                    pass
+                
                 self.current_instrument = pc_int
                 
-                # 🚀 Solo aplicar efectos críticos para velocidad
+                # 🚀 Aplicar efectos para asegurar volumen
                 self._apply_current_effects_fast()
                 
+                print(f"   ✅ Sistema principal: Preset {pc_int} ({preset['name']}) activado")
                 return True
             else:
+                print(f"   ❌ program_select falló: {result}")
                 return False
                 
-        except Exception:
+        except Exception as e:
+            print(f"   ❌ Error en _set_instrument: {e}")
             return False
     
     def _set_effect(self, effect_name: str, value: int) -> bool:
@@ -1514,33 +1542,92 @@ ctl.!default {
             pass  # Sin error handling para velocidad máxima
     
     def _simulate_midi_program_change(self, pc_number: int) -> bool:
-        """Simular mensaje MIDI Program Change internamente (como si viniera del MIDI Captain)"""
+        """Simular mensaje MIDI Program Change internamente - CORREGIDO"""
         try:
-            print(f"🎛️ Simulando MIDI Program Change {pc_number} (como MIDI Captain)")
+            print(f"🎛️ Simulando MIDI Program Change {pc_number}")
             
-            # Verificar que el preset existe
-            if pc_number not in self.presets:
-                print(f"❌ Preset {pc_number} no existe")
-                return False
+            # ESTRATEGIA 1: Verificar primero en presets del sistema principal (0-7)
+            if 0 <= pc_number <= 7 and pc_number in self.presets:
+                print(f"   📋 Usando preset del sistema principal: {pc_number}")
+                return self._set_instrument(pc_number)
             
-            # Llamar directamente a _set_instrument que es lo que hace _midi_callback
-            success = self._set_instrument(pc_number)
+            # ESTRATEGIA 2: Buscar en controladores activos para presets fuera del rango 0-7
+            for controller_name, controller in self.active_controllers.items():
+                controller_presets = controller.get('presets', {})
+                if pc_number in controller_presets:
+                    preset_info = controller_presets[pc_number]
+                    print(f"   🎛️ Usando preset de controlador {controller_name}: {pc_number} ({preset_info['name']})")
+                    
+                    # Aplicar preset directamente usando FluidSynth
+                    return self._apply_controller_preset_direct(controller, pc_number, preset_info)
             
-            if success:
-                print(f"✅ MIDI simulado: Preset {pc_number} activado")
-                # Notificar a clientes web como hace _midi_callback
-                if self.socketio:
-                    self.socketio.emit('instrument_changed', {
-                        'pc': pc_number,
-                        'name': self.presets[pc_number]['name']
-                    })
-            else:
-                print(f"❌ Error activando preset {pc_number}")
+            # ESTRATEGIA 3: Mapear preset alto a rango del sistema (fallback)
+            if pc_number > 7:
+                mapped_preset = pc_number % 8  # Mapear 8->0, 9->1, 10->2, etc.
+                if mapped_preset in self.presets:
+                    print(f"   🔄 Mapeando preset {pc_number} -> {mapped_preset}")
+                    return self._set_instrument(mapped_preset)
             
-            return success
+            print(f"❌ Preset {pc_number} no encontrado en ningún sistema")
+            return False
             
         except Exception as e:
             print(f"❌ Error simulando MIDI Program Change: {e}")
+            return False
+    
+    def _apply_controller_preset_direct(self, controller, pc_number: int, preset_info) -> bool:
+        """Aplicar preset de controlador directamente con FluidSynth - MÉTODO CORREGIDO"""
+        try:
+            if not self.fs or self.sfid is None:
+                print("   ❌ FluidSynth no inicializado")
+                return False
+            
+            # Obtener información del controlador
+            device_info = controller.get('device_info', {})
+            channel = device_info.get('midi_channel', 0)
+            
+            # Obtener información del preset
+            program = preset_info.get('program', 0)
+            bank = preset_info.get('bank', 0)
+            
+            print(f"   🎹 Aplicando: Canal={channel}, Bank={bank}, Program={program}")
+            
+            # MÉTODO 1: Program Select directo
+            result = self.fs.program_select(channel, self.sfid, bank, program)
+            print(f"   🎹 program_select resultado: {result}")
+            
+            if result == 0:  # Éxito
+                # MÉTODO 2: Enviar Program Change MIDI para asegurar
+                try:
+                    # Enviar PC message directo al canal
+                    self.fs.program_change(channel, program)
+                    print(f"   📨 Program Change enviado: Canal {channel}, Programa {program}")
+                except:
+                    pass
+                
+                # MÉTODO 3: Activar nota de prueba para forzar sonido
+                try:
+                    self.fs.noteon(channel, 60, 80)  # Nota C4 para activar el sonido
+                    time.sleep(0.1)  # Muy breve
+                    self.fs.noteoff(channel, 60)     # Apagar nota
+                    print(f"   🎵 Nota de prueba enviada en canal {channel}")
+                except:
+                    pass
+                
+                # Actualizar estado del controlador
+                controller['current_preset'] = pc_number
+                
+                # Aplicar efectos para asegurar que se escuche
+                self._apply_current_effects_fast()
+                
+                print(f"   ✅ Preset {pc_number} aplicado en controlador")
+                return True
+            else:
+                print(f"   ❌ program_select falló: {result}")
+                return False
+                
+        except Exception as e:
+            print(f"   ❌ Error aplicando preset de controlador: {e}")
             return False
     
     def _panic(self) -> bool:
