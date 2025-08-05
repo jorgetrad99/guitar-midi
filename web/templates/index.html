@@ -208,8 +208,11 @@
                     </div>
 
                     <div style="text-align: center; margin-top: 30px; padding: 20px; background: var(--white-05); border-radius: var(--border-radius);">
-                        <p style="margin-bottom: 10px;">🎸 <strong>Sistema Guitar-MIDI Complete</strong></p>
-                        <p style="font-size: 0.9rem; opacity: 0.8;">Desarrollado para músicos profesionales</p>
+                        <p style="margin-bottom: 15px;">🎸 <strong>Sistema Guitar-MIDI Complete</strong></p>
+                        <p style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 20px;">Desarrollado para músicos profesionales</p>
+                        <button onclick="validateSystem()" style="padding: 10px 20px; background: var(--secondary); color: white; border: none; border-radius: var(--border-radius-small); cursor: pointer; font-weight: 600;">
+                            🔍 Validar Presets FluidSynth
+                        </button>
                     </div>
                 </div>
             </div>
@@ -248,6 +251,45 @@
         console.log('📱 Interfaz Web Cargada');
         console.log('⌨️ Atajos: P=PANIC, 0-7=Presets, ESC=Cerrar');
         console.log('🌐 URL:', window.location.href);
+        
+        // Validar sistema FluidSynth
+        async function validateSystem() {
+            try {
+                const button = event.target;
+                button.disabled = true;
+                button.innerHTML = '🔄 Validando...';
+                
+                window.guitarMIDIApp.showStatus('🔍 Validando presets...', 'warning');
+                
+                const response = await fetch('/api/system/validate', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.valid) {
+                        window.guitarMIDIApp.showStatus('✅ Presets validados correctamente', 'success');
+                    } else {
+                        window.guitarMIDIApp.showStatus('⚠️ Se encontraron errores - revisar logs', 'warning');
+                    }
+                } else {
+                    window.guitarMIDIApp.showStatus('❌ Error en validación', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error validating system:', error);
+                window.guitarMIDIApp.showStatus('❌ Error de conexión', 'error');
+            } finally {
+                setTimeout(() => {
+                    const button = document.querySelector('button[onclick="validateSystem()"]');
+                    if (button) {
+                        button.disabled = false;
+                        button.innerHTML = '🔍 Validar Presets FluidSynth';
+                    }
+                }, 3000);
+            }
+        }
     </script>
 </body>
 </html>

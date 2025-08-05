@@ -173,6 +173,24 @@ def load_config():
             'error': f'Failed to load config: {str(e)}'
         }), 500
 
+@api.route('/system/validate', methods=['POST'])
+def validate_system():
+    """Validate FluidSynth preset mapping"""
+    try:
+        # Validar presets
+        is_valid = api.guitar_midi._validate_preset_mapping()
+        
+        return jsonify({
+            'success': True,
+            'valid': is_valid,
+            'message': 'Validación completada - revisar logs para detalles'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error en validación: {str(e)}'
+        }), 500
+
 # ============================================================================
 # NUEVAS APIs PARA CONTROLADORES ESPECÍFICOS
 # ============================================================================

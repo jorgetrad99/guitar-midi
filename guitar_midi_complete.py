@@ -530,6 +530,9 @@ ctl.!default {
             # Test de audio para verificar que funciona
             self._test_audio_output()
             
+            # Validar mapeo de presets
+            self._validate_preset_mapping()
+            
             # Inicializar extractor de instrumentos
             self.instrument_extractor = FluidSynthInstrumentExtractor()
             if self.instrument_extractor.initialize(sf_path):
@@ -613,6 +616,134 @@ ctl.!default {
                 
         except Exception as e:
             print(f"   ⚠️  Error en test de audio: {e}")
+    
+    def _validate_preset_mapping(self, _recursion_depth: int = 0) -> bool:
+        """Validar que los presets configurados funcionan correctamente con FluidSynth"""
+        try:
+            if not self.fs or self.sfid is None:
+                print("   ❌ FluidSynth no inicializado - no se puede validar")
+                return False
+                
+            print("   🔍 Validando mapeo de presets...")
+            validation_errors = []
+            
+            for preset_id, preset_info in self.presets.items():
+                try:
+                    channel = preset_info['channel']
+                    bank = preset_info['bank']
+                    program = preset_info['program']
+                    name = preset_info['name']
+                    
+                    print(f"      Validando preset {preset_id}: {name}")
+                    print(f"         Canal={channel}, Bank={bank}, Program={program}")
+                    
+                    # Intentar seleccionar el programa
+                    result = self.fs.program_select(channel, self.sfid, bank, program)
+                    
+                    if result == 0:  # Success en FluidSynth
+                        print(f"         ✅ Preset {preset_id} válido")
+                        
+                        # Test opcional con nota corta para verificar sonido
+                        try:
+                            self.fs.noteon(channel, 60, 60)  # Nota suave
+                            time.sleep(0.05)  # Muy corto para no molestar
+                            self.fs.noteoff(channel, 60)
+                        except:
+                            pass  # Ignorar errores del test de sonido
+                            
+                    else:
+                        error_msg = f"Preset {preset_id} ({name}): program_select falló (resultado: {result})"
+                        print(f"         ❌ {error_msg}")
+                        validation_errors.append(error_msg)
+                        
+                except Exception as preset_error:
+                    error_msg = f"Preset {preset_id}: Error de validación - {preset_error}"
+                    print(f"         ❌ {error_msg}")
+                    validation_errors.append(error_msg)
+            
+            if validation_errors:
+                print(f"   ⚠️  Se encontraron {len(validation_errors)} errores de validación:")
+                for error in validation_errors:
+                    print(f"      • {error}")
+                print("   🔧 Intentando corregir automáticamente...")
+                
+                # Intentar correcciones automáticas (solo una vez)
+                if _recursion_depth == 0 and self._fix_preset_mapping_issues():
+                    print("   🔄 Re-validando después de correcciones...")
+                    # Re-validar después de las correcciones (con profundidad 1 para evitar recursión infinita)
+                    return self._validate_preset_mapping(_recursion_depth + 1)
+                else:
+                    print("   💡 Los presets pueden sonar extraños debido a estos errores")
+                    return False
+            else:
+                print(f"   ✅ Todos los {len(self.presets)} presets validados correctamente")
+                return True
+                
+        except Exception as e:
+            print(f"   ❌ Error en validación de presets: {e}")
+            return False
+    
+    def _fix_preset_mapping_issues(self) -> bool:
+        """Intentar corregir problemas comunes en el mapeo de presets"""
+        try:
+            if not self.fs or self.sfid is None:
+                print("   ❌ FluidSynth no inicializado - no se pueden corregir presets")
+                return False
+                
+            print("   🔧 Intentando corregir problemas de mapeo...")
+            fixes_applied = 0
+            
+            for preset_id, preset_info in self.presets.items():
+                try:
+                    channel = preset_info['channel']
+                    bank = preset_info['bank']
+                    program = preset_info['program']
+                    name = preset_info['name']
+                    
+                    # Test actual preset
+                    result = self.fs.program_select(channel, self.sfid, bank, program)
+                    
+                    if result != 0:  # Si falló
+                        print(f"      🔧 Corrigiendo preset {preset_id}: {name}")
+                        
+                        # Intentar correcciones comunes
+                        corrections = [
+                            # Corregir banco de percusión
+                            (128 if channel == 9 else 0, program),
+                            # Usar bank 0 por defecto
+                            (0, program),
+                            # Si el programa está fuera de rango, usar 0
+                            (bank, 0 if program > 127 else program),
+                            # Último recurso: canal 0, bank 0, program 0 (Piano)
+                            (0, 0)
+                        ]
+                        
+                        for new_bank, new_program in corrections:
+                            test_result = self.fs.program_select(channel, self.sfid, new_bank, new_program)
+                            if test_result == 0:
+                                # Actualizar preset corregido
+                                self.presets[preset_id]['bank'] = new_bank
+                                self.presets[preset_id]['program'] = new_program
+                                
+                                print(f"         ✅ Corregido: Bank {bank}→{new_bank}, Program {program}→{new_program}")
+                                fixes_applied += 1
+                                break
+                        else:
+                            print(f"         ❌ No se pudo corregir preset {preset_id}")
+                            
+                except Exception as preset_error:
+                    print(f"         ❌ Error corrigiendo preset {preset_id}: {preset_error}")
+            
+            if fixes_applied > 0:
+                print(f"   ✅ Se aplicaron {fixes_applied} correcciones")
+                return True
+            else:
+                print("   ℹ️  No se necesitaron correcciones")
+                return True
+                
+        except Exception as e:
+            print(f"   ❌ Error corrigiendo presets: {e}")
+            return False
     
     def _init_midi_input(self) -> bool:
         """Inicializar entrada MIDI con auto-conexión"""
