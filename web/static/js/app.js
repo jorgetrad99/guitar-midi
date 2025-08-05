@@ -21,6 +21,7 @@ class GuitarMIDIApp {
         
         this.setupEventListeners();
         this.setupKeyboardShortcuts();
+        this.setupSocketIOListeners();
         this.loadSystemData();
         
         console.log('✅ Guitar-MIDI App initialized');
@@ -988,6 +989,51 @@ class GuitarMIDIApp {
         } catch (error) {
             console.error('❌ JS: Error setting controller preset:', error);
             this.showStatus('❌ Error de conexión', 'error');
+        }
+    }
+
+    setupSocketIOListeners() {
+        try {
+            // Verificar si SocketIO está disponible
+            if (typeof io === 'undefined') {
+                console.log('⚠️  SocketIO no disponible - eventos en tiempo real deshabilitados');
+                return;
+            }
+
+            // Conectar a SocketIO
+            const socket = io();
+            
+            // Escuchar conexiones/desconexiones de controladores
+            socket.on('controller_connected', (data) => {
+                console.log('🔌 Controlador conectado:', data);
+                this.showStatus(`✅ ${data.device_name} conectado`, 'success');
+                // Recargar lista de controladores
+                this.loadControllersSidebar();
+            });
+            
+            socket.on('controller_disconnected', (data) => {
+                console.log('🔌 Controlador desconectado:', data);
+                this.showStatus(`❌ ${data.device_name} desconectado`, 'error');
+                // Recargar lista de controladores
+                this.loadControllersSidebar();
+                
+                // Si era el controlador seleccionado, volver a vista del sistema
+                if (this.selectedController === data.device_name) {
+                    this.showSystemPresets();
+                }
+            });
+            
+            socket.on('instrument_changed', (data) => {
+                console.log('🎹 Instrumento cambiado vía MIDI:', data);
+                this.currentInstrument = data.pc;
+                this.updateCurrentInstrument();
+                this.updatePresetButtons();
+            });
+            
+            console.log('✅ SocketIO listeners configurados');
+            
+        } catch (error) {
+            console.error('❌ Error configurando SocketIO:', error);
         }
     }
 }
