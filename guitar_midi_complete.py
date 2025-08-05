@@ -1662,38 +1662,93 @@ ctl.!default {
             pass  # Sin error handling para velocidad máxima
     
     def _simulate_midi_program_change(self, pc_number: int) -> bool:
-        """Simular mensaje MIDI Program Change internamente - CORREGIDO"""
+        """Simular mensaje MIDI Program Change internamente - SOLUCION COMPLETA PARA WEB->CONTROLADORES"""
         try:
             print(f"🎛️ Simulando MIDI Program Change {pc_number}")
+            success = False
             
             # ESTRATEGIA 1: Verificar primero en presets del sistema principal (0-7)
             if 0 <= pc_number <= 7 and pc_number in self.presets:
                 print(f"   📋 Usando preset del sistema principal: {pc_number}")
-                return self._set_instrument(pc_number)
+                success = self._set_instrument(pc_number)
             
             # ESTRATEGIA 2: Buscar en controladores activos para presets fuera del rango 0-7
-            for controller_name, controller in self.active_controllers.items():
-                controller_presets = controller.get('presets', {})
-                if pc_number in controller_presets:
-                    preset_info = controller_presets[pc_number]
-                    print(f"   🎛️ Usando preset de controlador {controller_name}: {pc_number} ({preset_info['name']})")
-                    
-                    # Aplicar preset directamente usando FluidSynth
-                    return self._apply_controller_preset_direct(controller, pc_number, preset_info)
+            elif pc_number > 7:
+                for controller_name, controller in self.active_controllers.items():
+                    controller_presets = controller.get('presets', {})
+                    if pc_number in controller_presets:
+                        preset_info = controller_presets[pc_number]
+                        print(f"   🎛️ Usando preset de controlador {controller_name}: {pc_number} ({preset_info['name']})")
+                        
+                        # Aplicar preset directamente usando FluidSynth
+                        success = self._apply_controller_preset_direct(controller, pc_number, preset_info)
+                        break
+                
+                # ESTRATEGIA 3: Mapear preset alto a rango del sistema (fallback)
+                if not success:
+                    mapped_preset = pc_number % 8  # Mapear 8->0, 9->1, 10->2, etc.
+                    if mapped_preset in self.presets:
+                        print(f"   🔄 Mapeando preset {pc_number} -> {mapped_preset}")
+                        success = self._set_instrument(mapped_preset)
             
-            # ESTRATEGIA 3: Mapear preset alto a rango del sistema (fallback)
-            if pc_number > 7:
-                mapped_preset = pc_number % 8  # Mapear 8->0, 9->1, 10->2, etc.
-                if mapped_preset in self.presets:
-                    print(f"   🔄 Mapeando preset {pc_number} -> {mapped_preset}")
-                    return self._set_instrument(mapped_preset)
+            # ✨ SOLUCION CRITICA: Enviar Program Change a TODOS los controladores físicos
+            if success:
+                print(f"   🚀 SOLUCION: Enviando Program Change {pc_number} a controladores físicos...")
+                self._broadcast_program_change_to_all_controllers(pc_number)
+            else:
+                print(f"❌ Preset {pc_number} no encontrado en ningún sistema")
             
-            print(f"❌ Preset {pc_number} no encontrado en ningún sistema")
-            return False
+            return success
             
         except Exception as e:
             print(f"❌ Error simulando MIDI Program Change: {e}")
             return False
+    
+    def _broadcast_program_change_to_all_controllers(self, pc_number: int):
+        """🚀 MÉTODO CLAVE: Enviar Program Change a TODOS los controladores físicos conectados"""
+        try:
+            print(f"   📡 Enviando PC {pc_number} a todos los controladores conectados...")
+            
+            # Lista para rastrear envíos exitosos
+            sent_controllers = []
+            
+            # 1. Enviar a controladores con MIDI Output configurado (sistema original)
+            for device_name in self.midi_outputs.keys():
+                if device_name in self.connected_controllers:
+                    # Mapear el PC al rango del controlador (0-7)
+                    relative_pc = pc_number % 8
+                    if self._send_program_change_to_controller(device_name, relative_pc):
+                        sent_controllers.append(f"{device_name} (PC {relative_pc})")
+            
+            # 2. Enviar a controladores modulares activos (sistema nuevo)
+            for controller_name, controller_data in self.active_controllers.items():
+                device_info = controller_data.get('device_info', {})
+                
+                # Buscar si tiene MIDI output disponible
+                if controller_name in self.midi_outputs:
+                    # Calcular PC relativo basado en el rango del controlador
+                    preset_start = device_info.get('preset_start', 0)
+                    relative_pc = (pc_number - preset_start) % 8
+                    
+                    if self._send_program_change_to_controller(controller_name, relative_pc):
+                        sent_controllers.append(f"{controller_name} (PC {relative_pc})")
+            
+            # 3. Si no hay controladores específicos, enviar a todos los puertos MIDI disponibles
+            if not sent_controllers and self.midi_outputs:
+                print("   🔄 Enviando a todos los puertos MIDI disponibles como fallback...")
+                relative_pc = pc_number % 8
+                for device_name in self.midi_outputs.keys():
+                    if self._send_program_change_to_controller(device_name, relative_pc):
+                        sent_controllers.append(f"{device_name} (PC {relative_pc})")
+            
+            # Mostrar resultado
+            if sent_controllers:
+                print(f"   ✅ Program Change enviado a: {', '.join(sent_controllers)}")
+            else:
+                print(f"   ⚠️  No se pudieron enviar Program Changes (no hay controladores con MIDI Output)")
+                
+        except Exception as e:
+            print(f"   ❌ Error enviando Program Change a controladores: {e}")
     
     def _apply_controller_preset_direct(self, controller, pc_number: int, preset_info) -> bool:
         """Aplicar preset de controlador directamente con FluidSynth - MÉTODO CORREGIDO"""
