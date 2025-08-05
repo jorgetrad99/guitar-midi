@@ -1458,12 +1458,78 @@ ctl.!default {
                              (effect_name, str(value)))
                 conn.commit()
             
+            # 🚀 APLICAR EFECTOS AL CONTROLADOR ACTIVO INMEDIATAMENTE
+            self._apply_effects_to_active_controller(effect_name, value)
+            
             print(f"🎹 {effect_name}: {value}% - ✅ COMPLETADO")
             return True
             
         except Exception as e:
             print(f"❌ Error aplicando efecto {effect_name}: {e}")
             return False
+    
+    def _apply_effects_to_active_controller(self, effect_name: str, value: int):
+        """Aplicar efecto específico al controlador MIDI activo en tiempo real"""
+        try:
+            if not self.fs:
+                return
+            
+            # Determinar qué controlador está activo
+            active_controller_channel = None
+            active_controller_name = None
+            
+            # Método 1: Buscar controlador con preset actual activo
+            for controller_name, controller in self.active_controllers.items():
+                if controller.get('current_preset') == self.current_instrument:
+                    device_info = controller.get('device_info', {})
+                    active_controller_channel = device_info.get('midi_channel', 0)
+                    active_controller_name = controller_name
+                    break
+            
+            # Método 2: Aplicar al último controlador detectado (fallback)
+            if active_controller_channel is None and self.active_controllers:
+                controller_name = list(self.active_controllers.keys())[0]  # Primer controlador
+                controller = self.active_controllers[controller_name]
+                device_info = controller.get('device_info', {})
+                active_controller_channel = device_info.get('midi_channel', 0)
+                active_controller_name = controller_name
+            
+            # Método 3: Aplicar al preset del sistema actual (último recurso)
+            if active_controller_channel is None:
+                # Usar canal basado en el preset actual
+                active_controller_channel = self.current_instrument % 16
+                active_controller_name = "sistema"
+            
+            if active_controller_channel is not None:
+                cc_value = int((value / 100.0) * 127)
+                print(f"   🎛️ Aplicando {effect_name}={value}% al controlador '{active_controller_name}' (canal {active_controller_channel})")
+                
+                # Aplicar efecto específico al canal del controlador (FluidSynth interno)
+                cc_number = None
+                if effect_name == 'master_volume':
+                    self.fs.cc(active_controller_channel, 7, cc_value)  # CC 7 = Main Volume
+                    cc_number = 7
+                elif effect_name == 'global_reverb':
+                    self.fs.cc(active_controller_channel, 91, cc_value)  # CC 91 = Reverb Send
+                    cc_number = 91
+                elif effect_name == 'global_chorus':
+                    self.fs.cc(active_controller_channel, 93, cc_value)  # CC 93 = Chorus Send
+                    cc_number = 93
+                elif effect_name == 'global_cutoff':
+                    self.fs.cc(active_controller_channel, 74, cc_value)  # CC 74 = Cutoff  
+                    cc_number = 74
+                elif effect_name == 'global_resonance':
+                    self.fs.cc(active_controller_channel, 71, cc_value)  # CC 71 = Resonance
+                    cc_number = 71
+                
+                # 🎛️ ENVIAR CONTROL CHANGE AL CONTROLADOR FÍSICO
+                if cc_number is not None and active_controller_name != "sistema":
+                    self._send_control_change_to_controller(active_controller_name, cc_number, cc_value)
+                
+                print(f"   ✅ Efecto aplicado al canal {active_controller_channel}")
+                
+        except Exception as e:
+            print(f"   ❌ Error aplicando efecto a controlador activo: {e}")
     
     def _apply_current_effects(self):
         """Aplicar todos los efectos actuales (útil después de cambio de instrumento)"""
@@ -2377,6 +2443,27 @@ ctl.!default {
                 
         except Exception as e:
             print(f"   ❌ Error enviando PC a {device_name}: {e}")
+            return False
+    
+    def _send_control_change_to_controller(self, device_name: str, cc_number: int, cc_value: int):
+        """Enviar Control Change al controlador MIDI físico"""
+        try:
+            if device_name in self.midi_outputs:
+                midiout = self.midi_outputs[device_name]
+                
+                # Crear mensaje Control Change (0xB0 + canal 0, CC number, CC value)
+                cc_message = [0xB0, cc_number, cc_value]
+                
+                # Enviar mensaje
+                midiout.send_message(cc_message)
+                print(f"   🎛️ Control Change enviado a {device_name}: CC{cc_number}={cc_value}")
+                return True
+            else:
+                print(f"   ⚠️  MIDI Output no disponible para {device_name}")
+                return False
+                
+        except Exception as e:
+            print(f"   ❌ Error enviando CC a {device_name}: {e}")
             return False
     
     def start_device_monitoring(self):
