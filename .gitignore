@@ -6,4 +6,5 @@ __pycache__/
 .Python
 .env
 .ipynb_checkpoints
+guitar_midi.db
 
