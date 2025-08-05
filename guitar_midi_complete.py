@@ -1305,13 +1305,26 @@ ctl.!default {
         try:
             print(f"🎛️ Simulando MIDI Program Change {pc_number} (como MIDI Captain)")
             
-            # Crear mensaje MIDI Program Change (0xC0 + canal 0, programa pc_number)
-            midi_message = [0xC0, pc_number]  # Status 0xC0 = Program Change canal 0
+            # Verificar que el preset existe
+            if pc_number not in self.presets:
+                print(f"❌ Preset {pc_number} no existe")
+                return False
             
-            # Procesar el mensaje usando la misma función que MIDI Captain
-            self._handle_midi_message((midi_message, 0.0))
+            # Llamar directamente a _set_instrument que es lo que hace _midi_callback
+            success = self._set_instrument(pc_number)
             
-            return True
+            if success:
+                print(f"✅ MIDI simulado: Preset {pc_number} activado")
+                # Notificar a clientes web como hace _midi_callback
+                if self.socketio:
+                    self.socketio.emit('instrument_changed', {
+                        'pc': pc_number,
+                        'name': self.presets[pc_number]['name']
+                    })
+            else:
+                print(f"❌ Error activando preset {pc_number}")
+            
+            return success
             
         except Exception as e:
             print(f"❌ Error simulando MIDI Program Change: {e}")
