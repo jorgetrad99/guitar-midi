@@ -54,6 +54,7 @@ class GuitarMIDIComplete:
         # Base de datos SQLite integrada
         self.db_path = "guitar_midi.db"
         self._init_database()
+        self._load_effects_from_db()
         
         # Librería completa de instrumentos General MIDI
         self.all_instruments = {
@@ -304,6 +305,25 @@ class GuitarMIDIComplete:
         except Exception as e:
             print(f"⚠️  Error en base de datos: {e}")
     
+    def _load_effects_from_db(self):
+        """Cargar efectos guardados de la base de datos"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT key, value FROM config WHERE key LIKE "%_volume" OR key LIKE "global_%"')
+                rows = cursor.fetchall()
+                
+                for key, value in rows:
+                    try:
+                        self.effects[key] = int(value)
+                        print(f"   📂 Cargado {key}: {value}%")
+                    except ValueError:
+                        print(f"   ⚠️  Valor inválido para {key}: {value}")
+                        
+                print(f"   ✅ {len(rows)} efectos cargados de la BD")
+        except Exception as e:
+            print(f"   ⚠️  Error cargando efectos: {e}")
+    
     def _auto_detect_audio(self) -> bool:
         """Auto-detectar dispositivo de audio que funciona"""
         print("🔊 Auto-detectando audio...")
@@ -532,6 +552,9 @@ ctl.!default {
             
             # Validar mapeo de presets
             self._validate_preset_mapping()
+            
+            # Aplicar efectos iniciales
+            self._apply_current_effects()
             
             # Inicializar extractor de instrumentos
             self.instrument_extractor = FluidSynthInstrumentExtractor()
@@ -1100,6 +1123,9 @@ ctl.!default {
                 except Exception as db_e:
                     print(f"   ⚠️  Error guardando preset en DB: {db_e}")
                 
+                # Aplicar efectos después del cambio de instrumento
+                self._apply_current_effects()
+                
                 print(f"🎹 Instrumento: {instrument['name']} (PC: {pc_int}) - ✅ COMPLETADO")
                 return True
                 
@@ -1120,87 +1146,89 @@ ctl.!default {
                 return False
                 
             print(f"   🔧 Aplicando {effect_name}...")
-            if True:  # Cambié self.fs por True para simplificar debug
+            if self.fs:  # Verificar que FluidSynth esté inicializado
                 if effect_name == 'master_volume':
-                    # Volumen master - usar método compatible
+                    # Volumen master - estrategia simplificada y más efectiva
                     print(f"      Configurando volumen master: {value}%")
                     
-                    # Método 1: Intentar synth.gain
-                    gain = (value / 100.0) * 1.0  # Ganancia más conservadora
-                    result1 = self._safe_setting('synth.gain', gain)
-                    
-                    # Método 2: Usar CC 7 (Main Volume) en todos los canales
+                    # Método principal: CC 7 (Main Volume) en todos los canales usados
                     volume_cc = int((value / 100.0) * 127)
-                    print(f"      Aplicando CC 7 (Main Volume): {volume_cc} en 16 canales")
+                    print(f"      Aplicando CC 7 (Main Volume): {volume_cc}")
+                    
+                    # Aplicar a todos los canales (incluyen percusión en canal 9)
                     cc_success = 0
                     for channel in range(16):
                         try:
                             self.fs.cc(channel, 7, volume_cc)  # CC 7 = Main Volume
                             cc_success += 1
                         except Exception as e:
-                            print(f"      ❌ Error CC volume canal {channel}: {e}")
+                            print(f"         ❌ Error CC volume canal {channel}: {e}")
                     
-                    print(f"      ✅ Volume CC aplicado en {cc_success}/16 canales")
-                    
-                    # Método 3: Usar amixer como respaldo
+                    # Método alternativo: synth.gain
                     try:
-                        import subprocess
-                        alsa_volume = max(10, min(100, value))  # Entre 10% y 100%
-                        subprocess.run(['amixer', '-q', 'sset', 'Master', f'{alsa_volume}%'], 
-                                     capture_output=True, timeout=1)
-                        print(f"      ✅ ALSA Master volume: {alsa_volume}%")
+                        gain = max(0.1, min(2.0, (value / 100.0) * 1.5))  # Entre 0.1 y 2.0
+                        self.fs.setting('synth.gain', gain)
+                        print(f"      ✅ synth.gain: {gain}")
                     except:
-                        print(f"      ⚠️  ALSA volume control no disponible")
+                        print(f"      ⚠️  synth.gain no disponible")
+                    
+                    print(f"      ✅ Volume aplicado en {cc_success}/16 canales")
                     
                 elif effect_name == 'global_reverb':
-                    # Reverb global en todos los canales
+                    # Reverb global - CC 91 en todos los canales
                     reverb_value = int((value / 100.0) * 127)
-                    print(f"      Configurando reverb: {reverb_value} en 16 canales")
-                    for channel in range(16):
-                        try:
-                            self.fs.cc(channel, 91, reverb_value)  # CC 91 = Reverb
-                        except Exception as e:
-                            print(f"      ❌ Error CC reverb canal {channel}: {e}")
-                    print(f"      ✅ Reverb aplicado")
-                    
-                elif effect_name == 'global_chorus':
-                    # Chorus global en todos los canales
-                    chorus_value = int((value / 100.0) * 127)
-                    print(f"      Configurando chorus: {chorus_value} en 16 canales")
+                    print(f"      Aplicando Reverb CC 91: {reverb_value}")
                     cc_success = 0
                     for channel in range(16):
                         try:
-                            self.fs.cc(channel, 93, chorus_value)  # CC 93 = Chorus
+                            self.fs.cc(channel, 91, reverb_value)  # CC 91 = Reverb Send
                             cc_success += 1
                         except Exception as e:
-                            print(f"      ❌ Error CC chorus canal {channel}: {e}")
+                            print(f"         ❌ Error CC reverb canal {channel}: {e}")
+                    print(f"      ✅ Reverb aplicado en {cc_success}/16 canales")
+                    
+                elif effect_name == 'global_chorus':
+                    # Chorus global - CC 93 en todos los canales
+                    chorus_value = int((value / 100.0) * 127)
+                    print(f"      Aplicando Chorus CC 93: {chorus_value}")
+                    cc_success = 0
+                    for channel in range(16):
+                        try:
+                            self.fs.cc(channel, 93, chorus_value)  # CC 93 = Chorus Send
+                            cc_success += 1
+                        except Exception as e:
+                            print(f"         ❌ Error CC chorus canal {channel}: {e}")
                     print(f"      ✅ Chorus aplicado en {cc_success}/16 canales")
                         
                 elif effect_name == 'global_cutoff':
-                    # Filtro de corte global
+                    # Filtro de corte - CC 74 (Brightness/Cutoff)
                     cutoff_value = int((value / 100.0) * 127)
-                    print(f"      Configurando cutoff: {cutoff_value} en 16 canales")
+                    print(f"      Aplicando Cutoff CC 74: {cutoff_value}")
                     cc_success = 0
                     for channel in range(16):
                         try:
-                            self.fs.cc(channel, 74, cutoff_value)  # CC 74 = Cutoff
+                            self.fs.cc(channel, 74, cutoff_value)  # CC 74 = Brightness
                             cc_success += 1
                         except Exception as e:
-                            print(f"      ❌ Error CC cutoff canal {channel}: {e}")
+                            print(f"         ❌ Error CC cutoff canal {channel}: {e}")
                     print(f"      ✅ Cutoff aplicado en {cc_success}/16 canales")
                         
                 elif effect_name == 'global_resonance':
-                    # Resonancia global
+                    # Resonancia - CC 71 (Sound Timbre/Resonance)
                     resonance_value = int((value / 100.0) * 127)
-                    print(f"      Configurando resonance: {resonance_value} en 16 canales")
+                    print(f"      Aplicando Resonance CC 71: {resonance_value}")
                     cc_success = 0
                     for channel in range(16):
                         try:
                             self.fs.cc(channel, 71, resonance_value)  # CC 71 = Resonance
                             cc_success += 1
                         except Exception as e:
-                            print(f"      ❌ Error CC resonance canal {channel}: {e}")
+                            print(f"         ❌ Error CC resonance canal {channel}: {e}")
                     print(f"      ✅ Resonance aplicado en {cc_success}/16 canales")
+                
+                else:
+                    print(f"      ⚠️  Efecto {effect_name} no reconocido")
+                    return False
             
             self.effects[effect_name] = value
             
@@ -1217,6 +1245,16 @@ ctl.!default {
         except Exception as e:
             print(f"❌ Error aplicando efecto {effect_name}: {e}")
             return False
+    
+    def _apply_current_effects(self):
+        """Aplicar todos los efectos actuales (útil después de cambio de instrumento)"""
+        try:
+            print("🎛️ Aplicando efectos actuales...")
+            for effect_name, value in self.effects.items():
+                self._set_effect(effect_name, value)
+            print("✅ Efectos actuales aplicados")
+        except Exception as e:
+            print(f"❌ Error aplicando efectos actuales: {e}")
     
     def _panic(self) -> bool:
         """Detener todas las notas (PANIC)"""

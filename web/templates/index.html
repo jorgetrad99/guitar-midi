@@ -21,30 +21,8 @@
     </div>
 
     <main class="main-container">
-        <!-- Panel lateral de controladores -->
-        <aside class="controllers-sidebar">
-            <div class="sidebar-header">
-                <h3>🎚️ Controladores</h3>
-                <button class="refresh-controllers" title="Actualizar controladores">🔄</button>
-            </div>
-            
-            <div class="controllers-list" id="controllersList">
-                <div class="loading-controllers">
-                    <div>🔄</div>
-                    <p>Cargando...</p>
-                </div>
-            </div>
-            
-            <div class="selected-controller-presets" id="selectedControllerPresets">
-                <div class="no-controller-selected">
-                    <div>🎛️</div>
-                    <p>Selecciona un controlador</p>
-                </div>
-            </div>
-        </aside>
-
         <!-- Contenido principal -->
-        <main class="main">
+        <main class="main-content">
         <!-- Current Instrument Display -->
         <div class="current-instrument">
             <div class="current-icon" id="currentIcon">🎹</div>
@@ -156,6 +134,21 @@
             </div>
         </div>
 
+        <!-- TAB: Controller Presets (Dynamic) -->
+        <div id="controller-presets" class="tab-content">
+            <div class="section">
+                <div id="controllerPresetsContent">
+                    <div class="no-controller-selected-main">
+                        <div class="empty-state">
+                            <div class="empty-icon">🎛️</div>
+                            <h3>Selecciona un Controlador</h3>
+                            <p>Elige un controlador del panel lateral para ver sus presets</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- TAB: System Info -->
         <div id="info" class="tab-content">
             <div class="section">
@@ -218,6 +211,21 @@
             </div>
         </div>
         </main>
+        
+        <!-- Panel lateral de controladores (derecha) -->
+        <aside class="controllers-sidebar-right">
+            <div class="sidebar-header">
+                <h3>🎚️ Controladores</h3>
+                <button class="refresh-controllers" title="Actualizar controladores">🔄</button>
+            </div>
+            
+            <div class="controllers-list" id="controllersList">
+                <div class="loading-controllers">
+                    <div>🔄</div>
+                    <p>Cargando...</p>
+                </div>
+            </div>
+        </aside>
     </main>
 
     <!-- Preset Editor Modal -->
