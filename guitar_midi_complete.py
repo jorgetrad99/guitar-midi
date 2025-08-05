@@ -1405,28 +1405,154 @@ ctl.!default {
     # ============================================================================
     
     def _init_modular_system(self):
-        """Inicializar el sistema modular de detección de dispositivos"""
+        """Inicializar detección de dispositivos MIDI específicos (INTEGRADO)"""
         try:
-            print("🔌 Inicializando sistema modular...")
+            print("🔌 Inicializando detección de dispositivos MIDI específicos...")
             
-            # Importar módulos del sistema modular
-            try:
-                from modules.device_manager import DeviceManager
-                print("   ✅ DeviceManager importado")
-            except ImportError as e:
-                print(f"   ⚠️ Sistema modular no disponible: {e}")
-                return
+            # Detectar dispositivos MIDI conectados actualmente
+            self._detect_specific_midi_devices()
             
-            # Crear DeviceManager con callback
-            self.device_manager = DeviceManager(main_system_callback=self._modular_callback)
-            
-            # Iniciar monitoreo
-            self.device_manager.start_monitoring()
-            
-            print("   ✅ Sistema modular iniciado")
+            print("   ✅ Detección de dispositivos iniciada")
             
         except Exception as e:
-            print(f"   ❌ Error inicializando sistema modular: {e}")
+            print(f"   ❌ Error inicializando detección: {e}")
+    
+    def _detect_specific_midi_devices(self):
+        """Detectar dispositivos MIDI específicos conectados"""
+        try:
+            import rtmidi
+            
+            # Obtener dispositivos MIDI disponibles
+            midiin = rtmidi.MidiIn()
+            available_ports = midiin.get_ports()
+            
+            print(f"   📡 Escaneando {len(available_ports)} puertos MIDI...")
+            
+            # Patrones de detección
+            device_patterns = {
+                'akai_mpk_mini': [r'.*MPK.*Mini.*', r'.*Akai.*MPK.*', r'MPK.*Mini.*', r'.*AKAI.*MPK.*'],
+                'fishman_tripleplay': [r'.*Fishman.*Triple.*', r'.*TriplePlay.*', r'.*Fishman.*'],
+                'midi_captain': [r'.*Captain.*', r'.*MIDI.*Captain.*', r'Pico.*Captain.*'],
+                'mvave_pocket': [r'.*MVAVE.*Pocket.*', r'.*Pocket.*MVAVE.*', r'MVAVE.*'],
+                'hexaphonic': [r'.*HEX.*', r'.*Hexaphonic.*', r'.*Guitar.*Synth.*'],
+                'generic_midi': [r'.*']  # Catch-all para otros dispositivos
+            }
+            
+            detected_devices = []
+            
+            for i, port_name in enumerate(available_ports):
+                print(f"   🎛️ Puerto {i}: {port_name}")
+                
+                # Detectar tipo de dispositivo
+                device_type = None
+                for dev_type, patterns in device_patterns.items():
+                    for pattern in patterns:
+                        import re
+                        if re.search(pattern, port_name, re.IGNORECASE):
+                            device_type = dev_type
+                            break
+                    if device_type and device_type != 'generic_midi':
+                        break
+                
+                if device_type and device_type != 'generic_midi':
+                    print(f"      ✅ Detectado: {device_type}")
+                    detected_devices.append({
+                        'name': port_name,
+                        'type': device_type,
+                        'port_index': i,
+                        'connected': True
+                    })
+                    
+                    # Registrar en el sistema
+                    self._register_detected_device(port_name, device_type, i)
+            
+            if detected_devices:
+                print(f"   🎯 Dispositivos específicos detectados: {len(detected_devices)}")
+            else:
+                print("   💡 No se detectaron dispositivos específicos (usando sistema original)")
+            
+            midiin.close_port()
+            
+        except Exception as e:
+            print(f"   ❌ Error detectando dispositivos: {e}")
+    
+    def _register_detected_device(self, device_name: str, device_type: str, port_index: int):
+        """Registrar dispositivo detectado en el sistema"""
+        try:
+            # Información básica del dispositivo
+            device_info = {
+                'name': device_name,
+                'type': device_type,
+                'port_index': port_index,
+                'connected': True,
+                'preset_start': len(self.active_controllers) * 8,  # 8 presets por dispositivo
+                'preset_end': (len(self.active_controllers) * 8) + 7,
+                'midi_channel': len(self.active_controllers) % 16,  # Rotar canales
+                'last_connected': time.time()
+            }
+            
+            # Crear controlador simple
+            controller = self._create_simple_controller(device_info)
+            
+            if controller:
+                self.active_controllers[device_name] = controller
+                print(f"      🎮 Controlador creado: Presets {device_info['preset_start']}-{device_info['preset_end']}, Canal {device_info['midi_channel']}")
+                
+        except Exception as e:
+            print(f"   ❌ Error registrando dispositivo {device_name}: {e}")
+    
+    def _create_simple_controller(self, device_info: dict):
+        """Crear controlador simple integrado"""
+        try:
+            device_type = device_info['type']
+            
+            # Presets por defecto según el tipo
+            if device_type == 'akai_mpk_mini':
+                presets = {
+                    device_info['preset_start'] + 0: {'name': 'MPK Piano', 'program': 0, 'bank': 0, 'icon': '🎹'},
+                    device_info['preset_start'] + 1: {'name': 'MPK E.Piano', 'program': 4, 'bank': 0, 'icon': '🎹'},
+                    device_info['preset_start'] + 2: {'name': 'MPK Organ', 'program': 16, 'bank': 0, 'icon': '🎹'},
+                    device_info['preset_start'] + 3: {'name': 'MPK Synth', 'program': 80, 'bank': 0, 'icon': '🎛️'},
+                    device_info['preset_start'] + 4: {'name': 'MPK Bass', 'program': 38, 'bank': 0, 'icon': '🎸'},
+                    device_info['preset_start'] + 5: {'name': 'MPK Strings', 'program': 48, 'bank': 0, 'icon': '🎻'},
+                    device_info['preset_start'] + 6: {'name': 'MPK Brass', 'program': 56, 'bank': 0, 'icon': '🎺'},
+                    device_info['preset_start'] + 7: {'name': 'MPK Lead', 'program': 81, 'bank': 0, 'icon': '🎛️'}
+                }
+            elif device_type == 'fishman_tripleplay':
+                presets = {
+                    device_info['preset_start'] + 0: {'name': 'TP Acoustic', 'program': 24, 'bank': 0, 'icon': '🎸'},
+                    device_info['preset_start'] + 1: {'name': 'TP Electric', 'program': 27, 'bank': 0, 'icon': '🎸'},
+                    device_info['preset_start'] + 2: {'name': 'TP Distortion', 'program': 30, 'bank': 0, 'icon': '🎸'},
+                    device_info['preset_start'] + 3: {'name': 'TP Violin', 'program': 40, 'bank': 0, 'icon': '🎻'},
+                    device_info['preset_start'] + 4: {'name': 'TP Cello', 'program': 42, 'bank': 0, 'icon': '🎻'},
+                    device_info['preset_start'] + 5: {'name': 'TP Trumpet', 'program': 56, 'bank': 0, 'icon': '🎺'},
+                    device_info['preset_start'] + 6: {'name': 'TP Flute', 'program': 73, 'bank': 0, 'icon': '🪈'},
+                    device_info['preset_start'] + 7: {'name': 'TP Synth', 'program': 80, 'bank': 0, 'icon': '🎛️'}
+                }
+            else:
+                # Presets genéricos
+                presets = {
+                    device_info['preset_start'] + i: {
+                        'name': f'{device_type.title()} {i+1}', 
+                        'program': i, 
+                        'bank': 0, 
+                        'icon': '🎵'
+                    } for i in range(8)
+                }
+            
+            # Controlador simple
+            controller = {
+                'device_info': device_info,
+                'presets': presets,
+                'current_preset': device_info['preset_start'],
+                'active': True
+            }
+            
+            return controller
+            
+        except Exception as e:
+            print(f"   ❌ Error creando controlador simple: {e}")
+            return None
     
     def _modular_callback(self, event_type: str, data: dict):
         """Callback para eventos del sistema modular"""
@@ -1555,22 +1681,27 @@ ctl.!default {
         """Obtener estado del sistema modular para la API"""
         try:
             status = {
-                'modular_active': self.device_manager is not None and self.device_manager.is_running,
+                'modular_active': True,  # Sistema integrado siempre activo
                 'controllers': {},
                 'devices': {}
             }
             
-            # Estado de controladores activos
+            # Estado de controladores activos (sistema integrado)
             for name, controller in self.active_controllers.items():
                 try:
-                    status['controllers'][name] = controller.get_status()
-                except:
-                    status['controllers'][name] = {'error': 'No disponible'}
-            
-            # Estado de dispositivos si está disponible
-            if self.device_manager:
-                devices_info = self.device_manager.get_all_registered_devices()
-                status['devices'] = devices_info
+                    device_info = controller.get('device_info', {})
+                    status['controllers'][name] = {
+                        'device_name': name,
+                        'device_type': device_info.get('type', 'unknown'),
+                        'is_active': controller.get('active', False),
+                        'current_preset': controller.get('current_preset', 0),
+                        'preset_range': f"{device_info.get('preset_start', 0)}-{device_info.get('preset_end', 7)}",
+                        'midi_channel': device_info.get('midi_channel', 0),
+                        'total_presets': len(controller.get('presets', {})),
+                        'connected': device_info.get('connected', False)
+                    }
+                except Exception as e:
+                    status['controllers'][name] = {'error': f'Error: {e}'}
             
             return status
             
