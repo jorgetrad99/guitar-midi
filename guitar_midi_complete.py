@@ -1295,23 +1295,44 @@ ctl.!default {
         except Exception as e:
             print(f"⚠️  Error desconectando MIDI: {e}")
     
-    def _midi_callback(self, message, data):
-        """Callback para mensajes MIDI entrantes - OPTIMIZADO PARA BAJA LATENCIA"""
-        msg, delta_time = message
-        
-        # 🚀 Procesamiento ultra-rápido - solo lo esencial
-        if len(msg) >= 2 and 0xC0 <= msg[0] <= 0xCF and 0 <= msg[1] <= 7:
-            # Program Change directo - sin logs para velocidad máxima
-            if self._set_instrument(msg[1]):
-                # Notificación web solo si es necesario
+    def _change_preset_universal(self, pc_number: int, source: str = "unknown") -> bool:
+        """🎯 FUNCIÓN UNIVERSAL - TODO CAMBIO DE PRESET PASA POR AQUÍ (MIDI Captain + Web)"""
+        try:
+            print(f"🎹 CAMBIO UNIVERSAL DE PRESET {pc_number} (fuente: {source})")
+            
+            # Cambiar el instrumento (mismo código que funciona en MIDI Captain)
+            success = self._set_instrument(pc_number)
+            
+            if success:
+                print(f"   ✅ Preset {pc_number} activado desde {source}")
+                
+                # Notificar a la web interface si es necesario
                 if self.socketio:
                     try:
                         self.socketio.emit('instrument_changed', {
-                            'pc': msg[1],
-                            'name': self.presets[msg[1]]['name']
+                            'pc': pc_number,
+                            'name': self.presets[pc_number]['name'],
+                            'source': source
                         })
                     except:
                         pass
+            else:
+                print(f"   ❌ Error activando preset {pc_number} desde {source}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error en cambio universal de preset {pc_number}: {e}")
+            return False
+
+    def _midi_callback(self, message, data):
+        """Callback para mensajes MIDI entrantes - USA FUNCIÓN UNIVERSAL"""
+        msg, delta_time = message
+        
+        # 🚀 Procesamiento ultra-rápido - Program Change
+        if len(msg) >= 2 and 0xC0 <= msg[0] <= 0xCF and 0 <= msg[1] <= 7:
+            # Usar función universal (mismo que web)
+            self._change_preset_universal(msg[1], "MIDI_Captain")
     
     def _set_instrument(self, pc: int) -> bool:
         """Cambiar instrumento activo usando presets - CORREGIDO Y OPTIMIZADO"""

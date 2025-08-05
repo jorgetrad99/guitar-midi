@@ -86,18 +86,10 @@ def activate_instrument(pc):
             'error': f'Preset {pc} no existe'
         }), 404
     
-    # 🚀 HACER EXACTAMENTE LO MISMO QUE EL MIDI CAPTAIN
-    print(f"   🎯 Llamando directamente a _set_instrument() como MIDI Captain")
-    success = api.guitar_midi._set_instrument(pc)
-    print(f"   Resultado _set_instrument: {'✅ Éxito' if success else '❌ Error'}")
-    
-    if success:
-        # Emit WebSocket update
-        if hasattr(api.guitar_midi, 'socketio') and api.guitar_midi.socketio:
-            api.guitar_midi.socketio.emit('instrument_changed', {
-                'pc': pc,
-                'name': api.guitar_midi.presets[pc]['name']
-            })
+    # 🎯 USAR EXACTAMENTE LA MISMA FUNCIÓN QUE EL MIDI CAPTAIN
+    print(f"   🎯 Usando función universal (mismo código que MIDI Captain)")
+    success = api.guitar_midi._change_preset_universal(pc, "Web_Interface")
+    print(f"   Resultado función universal: {'✅ Éxito' if success else '❌ Error'}")
     
     return jsonify({
         'success': success, 
