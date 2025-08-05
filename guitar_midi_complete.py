@@ -231,6 +231,10 @@ class GuitarMIDIComplete:
         self.device_monitor_thread = None
         self.monitoring_active = False
         
+        # MIDI Output para comunicación bidireccional con controladores
+        self.midi_outputs = {}  # device_name -> MidiOut instance
+        self.controller_ports = {}  # device_name -> port_info
+        
         # Componentes del sistema
         self.fs = None  # FluidSynth
         self.sfid = None  # SoundFont ID
@@ -1526,16 +1530,34 @@ ctl.!default {
                 cc_value = int((value / 100.0) * 127)
                 
                 if effect_name == 'master_volume':
-                    # Solo canales activos para velocidad
-                    for channel in [0, 1, 2, 9]:  # Solo canales principales
+                    # Aplicar a TODOS los canales para asegurar que funcione con controladores
+                    for channel in range(16):  # Todos los canales MIDI
                         try:
                             self.fs.cc(channel, 7, cc_value)
                         except:
                             pass
                 elif effect_name == 'global_reverb':
-                    for channel in [0, 1, 2, 9]:
+                    for channel in range(16):  # Todos los canales MIDI
                         try:
                             self.fs.cc(channel, 91, cc_value)
+                        except:
+                            pass
+                elif effect_name == 'global_chorus':
+                    for channel in range(16):  # Todos los canales MIDI
+                        try:
+                            self.fs.cc(channel, 93, cc_value)
+                        except:
+                            pass
+                elif effect_name == 'global_cutoff':
+                    for channel in range(16):  # Todos los canales MIDI
+                        try:
+                            self.fs.cc(channel, 74, cc_value)
+                        except:
+                            pass
+                elif effect_name == 'global_resonance':
+                    for channel in range(16):  # Todos los canales MIDI
+                        try:
+                            self.fs.cc(channel, 71, cc_value)
                         except:
                             pass
         except:
@@ -1616,6 +1638,19 @@ ctl.!default {
                 
                 # Actualizar estado del controlador
                 controller['current_preset'] = pc_number
+                
+                # 🔄 ENVIAR PROGRAM CHANGE AL CONTROLADOR FÍSICO
+                # Buscar el nombre del controlador que corresponde a este preset
+                for controller_name, ctrl_data in self.active_controllers.items():
+                    if ctrl_data == controller:
+                        # Calcular programa relativo para el controlador (0-7 dentro de su rango)
+                        device_info = controller.get('device_info', {})
+                        preset_start = device_info.get('preset_start', 0)
+                        relative_program = pc_number - preset_start
+                        
+                        if 0 <= relative_program <= 7:  # Rango válido para controlador
+                            self._send_program_change_to_controller(controller_name, relative_program)
+                        break
                 
                 # Aplicar efectos para asegurar que se escuche
                 self._apply_current_effects_fast()
@@ -2014,6 +2049,9 @@ ctl.!default {
                     
                     # Registrar en el sistema
                     self._register_detected_device(port_name, device_type, i)
+                    
+                    # Configurar MIDI Output para este controlador
+                    self._setup_midi_output(port_name, i)
             
             if detected_devices:
                 print(f"   🎯 Dispositivos específicos detectados: {len(detected_devices)}")
@@ -2287,6 +2325,59 @@ ctl.!default {
         except Exception as e:
             print(f"❌ Error obteniendo estado modular: {e}")
             return {'error': str(e)}
+    
+    def _setup_midi_output(self, device_name: str, port_index: int):
+        """Configurar MIDI Output para comunicación bidireccional con controlador"""
+        try:
+            import rtmidi
+            
+            # Crear instancia de MIDI Out
+            midiout = rtmidi.MidiOut()
+            available_ports = midiout.get_ports()
+            
+            # Buscar puerto de salida correspondiente
+            output_port = None
+            for i, port_name in enumerate(available_ports):
+                if device_name in port_name or any(word in port_name for word in device_name.split()):
+                    output_port = i
+                    break
+            
+            if output_port is not None:
+                midiout.open_port(output_port)
+                self.midi_outputs[device_name] = midiout
+                self.controller_ports[device_name] = {
+                    'input_port': port_index,
+                    'output_port': output_port,
+                    'output_name': available_ports[output_port]
+                }
+                print(f"   🔄 MIDI Output configurado: {device_name} -> Puerto {output_port}")
+            else:
+                print(f"   ⚠️  Puerto de salida MIDI no encontrado para: {device_name}")
+                midiout.close_port()
+                
+        except Exception as e:
+            print(f"   ❌ Error configurando MIDI Output para {device_name}: {e}")
+    
+    def _send_program_change_to_controller(self, device_name: str, program: int):
+        """Enviar Program Change al controlador MIDI físico"""
+        try:
+            if device_name in self.midi_outputs:
+                midiout = self.midi_outputs[device_name]
+                
+                # Crear mensaje Program Change (0xC0 + canal 0, programa)
+                pc_message = [0xC0, program]
+                
+                # Enviar mensaje
+                midiout.send_message(pc_message)
+                print(f"   📤 Program Change enviado a {device_name}: PC {program}")
+                return True
+            else:
+                print(f"   ⚠️  MIDI Output no disponible para {device_name}")
+                return False
+                
+        except Exception as e:
+            print(f"   ❌ Error enviando PC a {device_name}: {e}")
+            return False
     
     def start_device_monitoring(self):
         """Iniciar monitoreo automático de dispositivos MIDI"""
