@@ -1135,6 +1135,9 @@ ctl.!default {
                         if not any(sys_name.lower() in device_name.lower() for sys_name in system_names):
                             current_devices.append(device_name)
                             print(f"   ✅ Controlador MIDI detectado: {device_name}")
+                            
+                            # 🚀 CONFIGURAR MIDI OUTPUT INMEDIATAMENTE
+                            self._setup_midi_output_immediate(device_name)
                 
                 midiin.close_port()
                 
@@ -1305,6 +1308,25 @@ ctl.!default {
             
             if success:
                 print(f"   ✅ Preset {pc_number} activado desde {source}")
+                
+                # 🚀 ENVIAR PROGRAM CHANGE A TODOS LOS CONTROLADORES FÍSICOS
+                print(f"   📡 Enviando Program Change {pc_number} a controladores físicos...")
+                sent_count = 0
+                
+                for device_name, midiout in self.midi_outputs.items():
+                    try:
+                        # Program Change: 0xC0 + canal 0, programa
+                        pc_message = [0xC0, pc_number % 8]  # Mapear a rango 0-7
+                        midiout.send_message(pc_message)
+                        print(f"      📤 PC {pc_number % 8} enviado a: {device_name}")
+                        sent_count += 1
+                    except Exception as e:
+                        print(f"      ❌ Error enviando a {device_name}: {e}")
+                
+                if sent_count > 0:
+                    print(f"   ✅ Program Change enviado a {sent_count} controladores")
+                else:
+                    print(f"   ⚠️  No se enviaron Program Changes (sin MIDI Outputs)")
                 
                 # Notificar a la web interface si es necesario
                 if self.socketio:
@@ -2573,6 +2595,47 @@ ctl.!default {
         except Exception as e:
             print(f"   ❌ Error enviando CC a {device_name}: {e}")
             return False
+    
+    def _setup_midi_output_immediate(self, device_name: str):
+        """Configurar MIDI Output inmediatamente cuando se detecta un controlador"""
+        try:
+            import rtmidi
+            
+            # Crear instancia de MIDI Out
+            midiout = rtmidi.MidiOut()
+            available_output_ports = midiout.get_ports()
+            
+            print(f"   🔍 Buscando puerto MIDI Output para: {device_name}")
+            print(f"   🔍 Puertos Output disponibles: {available_output_ports}")
+            
+            # Buscar puerto de salida que coincida
+            output_port_index = None
+            for i, output_port_name in enumerate(available_output_ports):
+                # Comparar nombres de forma más flexible
+                if (device_name in output_port_name or 
+                    any(word in output_port_name for word in device_name.split(':')[0].split()) or
+                    output_port_name in device_name):
+                    
+                    output_port_index = i
+                    print(f"   ✅ Puerto Output encontrado: {output_port_name} (índice {i})")
+                    break
+            
+            if output_port_index is not None:
+                midiout.open_port(output_port_index)
+                self.midi_outputs[device_name] = midiout
+                print(f"   🔄 MIDI Output configurado exitosamente para: {device_name}")
+                
+                # Enviar Program Change de prueba
+                test_pc = [0xC0, 0]  # Program Change canal 0, programa 0
+                midiout.send_message(test_pc)
+                print(f"   🎹 Program Change de prueba enviado a: {device_name}")
+                
+            else:
+                print(f"   ⚠️  No se encontró puerto Output para: {device_name}")
+                midiout.close_port()
+                
+        except Exception as e:
+            print(f"   ❌ Error configurando MIDI Output para {device_name}: {e}")
     
     def start_device_monitoring(self):
         """Iniciar monitoreo automático de dispositivos MIDI"""
