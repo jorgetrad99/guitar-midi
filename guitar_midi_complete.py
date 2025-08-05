@@ -1116,9 +1116,33 @@ ctl.!default {
             
             current_devices = []
             
-            # MÉTODO 1: Usar rtmidi (multiplataforma)
+            # MÉTODO 1: Usar rtmidi (multiplataforma) con APIs específicas
             try:
-                midiin = rtmidi.MidiIn()
+                import platform
+                
+                # Seleccionar API según sistema operativo
+                if platform.system() == "Windows":
+                    midiin = rtmidi.MidiIn(rtmidi.API_WINDOWS_MM)
+                    print(f"   🎵 Usando Windows MIDI API")
+                elif platform.system() == "Darwin":  # macOS
+                    midiin = rtmidi.MidiIn(rtmidi.API_MACOSX_CORE)
+                    print(f"   🎵 Usando macOS Core MIDI API")
+                else:
+                    # Linux - intentar diferentes APIs
+                    midiin = None
+                    for api_name, api_const in [("JACK", rtmidi.API_UNIX_JACK), ("ALSA", rtmidi.API_LINUX_ALSA)]:
+                        try:
+                            midiin = rtmidi.MidiIn(api_const)
+                            print(f"   🎵 Usando {api_name} MIDI API")
+                            break
+                        except:
+                            continue
+                    
+                    if midiin is None:
+                        # Último recurso
+                        midiin = rtmidi.MidiIn()
+                        print(f"   🎵 Usando API MIDI por defecto")
+                
                 available_ports = midiin.get_ports()
                 
                 print(f"   🔍 DEBUG - Puertos MIDI Input detectados: {available_ports}")
@@ -1131,7 +1155,7 @@ ctl.!default {
                         device_name = port_name
                         
                         # Filtrar nombres del sistema
-                        system_names = ['Microsoft GS Wavetable', 'MIDI Mapper', 'Timer', 'Announce']
+                        system_names = ['Microsoft GS Wavetable', 'MIDI Mapper', 'Timer', 'Announce', 'RtMidiOut Client']
                         if not any(sys_name.lower() in device_name.lower() for sys_name in system_names):
                             current_devices.append(device_name)
                             print(f"   ✅ Controlador MIDI detectado: {device_name}")
@@ -1139,7 +1163,10 @@ ctl.!default {
                             # 🚀 CONFIGURAR MIDI OUTPUT INMEDIATAMENTE
                             self._setup_midi_output_immediate(device_name)
                 
-                midiin.close_port()
+                try:
+                    midiin.close_port()
+                except:
+                    pass
                 
             except Exception as e:
                 print(f"   ❌ Error con rtmidi: {e}")
@@ -2597,12 +2624,35 @@ ctl.!default {
             return False
     
     def _setup_midi_output_immediate(self, device_name: str):
-        """Configurar MIDI Output inmediatamente cuando se detecta un controlador"""
+        """Configurar MIDI Output inmediatamente cuando se detecta un controlador - COMPATIBLE MULTIPLATAFORMA"""
         try:
             import rtmidi
+            import platform
             
-            # Crear instancia de MIDI Out
-            midiout = rtmidi.MidiOut()
+            print(f"   🔍 Sistema operativo: {platform.system()}")
+            
+            # Diferentes APIs según el sistema
+            if platform.system() == "Windows":
+                # Usar API de Windows
+                midiout = rtmidi.MidiOut(rtmidi.API_WINDOWS_MM)
+            elif platform.system() == "Darwin":  # macOS
+                midiout = rtmidi.MidiOut(rtmidi.API_MACOSX_CORE)
+            else:
+                # Linux - intentar diferentes APIs
+                try:
+                    # Intentar JACK primero
+                    midiout = rtmidi.MidiOut(rtmidi.API_UNIX_JACK)
+                    print(f"   🎵 Usando JACK MIDI API")
+                except:
+                    try:
+                        # Fallback a ALSA
+                        midiout = rtmidi.MidiOut(rtmidi.API_LINUX_ALSA)
+                        print(f"   🎵 Usando ALSA MIDI API")
+                    except:
+                        # Último recurso - API por defecto
+                        midiout = rtmidi.MidiOut()
+                        print(f"   🎵 Usando API MIDI por defecto")
+            
             available_output_ports = midiout.get_ports()
             
             print(f"   🔍 Buscando puerto MIDI Output para: {device_name}")
@@ -2632,7 +2682,10 @@ ctl.!default {
                 
             else:
                 print(f"   ⚠️  No se encontró puerto Output para: {device_name}")
-                midiout.close_port()
+                try:
+                    midiout.close_port()
+                except:
+                    pass
                 
         except Exception as e:
             print(f"   ❌ Error configurando MIDI Output para {device_name}: {e}")

@@ -12,7 +12,10 @@
       "Bash(rm:*)",
       "Bash(\"C:\\Users\\jemtl\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" --version)",
       "Bash(\"C:\\Users\\jemtl\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" guitar_midi_complete.py)",
-      "Bash(\"C:\\Users\\jemtl\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" \"C:\\Users\\jemtl\\Documents\\clients\\personal\\guitar-midi\\guitar_midi_complete.py\")"
+      "Bash(\"C:\\Users\\jemtl\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" \"C:\\Users\\jemtl\\Documents\\clients\\personal\\guitar-midi\\guitar_midi_complete.py\")",
+      "Bash(groups)",
+      "Bash(ls:*)",
+      "Bash(aconnect:*)"
     ],
     "deny": []
   }
