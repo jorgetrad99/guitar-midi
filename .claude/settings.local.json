@@ -9,7 +9,9 @@
       "Bash(pyenv:*)",
       "Bash(dir)",
       "Bash(del:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(\"C:\\Users\\jemtl\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" --version)",
+      "Bash(\"C:\\Users\\jemtl\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" guitar_midi_complete.py)"
     ],
     "deny": []
   }

@@ -73,17 +73,23 @@ def update_preset(preset_id):
 
 @api.route('/instruments/<int:pc>/activate', methods=['POST'])
 def activate_instrument(pc):
-    """Activate a specific preset/instrument"""
-    print(f"🎹 API: Activando instrumento {pc}")  # Debug log
-    print(f"   Presets disponibles: {list(api.guitar_midi.presets.keys())}")  # Debug presets
+    """Activate a specific preset/instrument using MIDI Program Change simulation"""
+    print(f"🎹 API: Activando instrumento {pc} usando simulación MIDI")
+    print(f"   Presets disponibles: {list(api.guitar_midi.presets.keys())}")
     if pc in api.guitar_midi.presets:
         preset_info = api.guitar_midi.presets[pc]
         print(f"   Preset {pc} info: {preset_info}")
     else:
         print(f"   ❌ Preset {pc} NO EXISTE en presets")
+        return jsonify({
+            'success': False, 
+            'error': f'Preset {pc} no existe'
+        }), 404
     
-    success = api.guitar_midi._set_instrument(pc)
-    print(f"   Resultado: {'✅ Éxito' if success else '❌ Error'}")  # Debug log
+    # Usar simulación de MIDI Program Change (como MIDI Captain)
+    success = api.guitar_midi._simulate_midi_program_change(pc)
+    print(f"   Resultado simulación MIDI: {'✅ Éxito' if success else '❌ Error'}")
+    
     if success:
         # Emit WebSocket update
         if hasattr(api.guitar_midi, 'socketio') and api.guitar_midi.socketio:
@@ -260,7 +266,7 @@ def set_controller_preset(controller_name, preset_id):
         }), 500
 
 def _set_original_controller_preset(controller_name, preset_id):
-    """Establecer preset en controlador original"""
+    """Establecer preset en controlador original usando simulación MIDI"""
     controller_info = api.guitar_midi.connected_controllers[controller_name]
     controller_type = controller_info['type']
     
@@ -278,30 +284,24 @@ def _set_original_controller_preset(controller_name, preset_id):
             'error': f'Preset {preset_id} not available for {controller_type}'
         }), 400
     
-    # Configurar preset en FluidSynth
     preset_info = available_presets[preset_id]
-    success = False
     
-    try:
-        if api.guitar_midi.fs and api.guitar_midi.sfid is not None:
-            channel = preset_info['channel']
-            bank = preset_info['bank']
-            program = preset_info['program']
-            
-            result = api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
-            print(f"   🎹 program_select resultado: {result}")
-            
-            # Aplicar efectos después del cambio de preset
-            api.guitar_midi._apply_current_effects()
-            
-            # Actualizar preset actual del controlador
-            api.guitar_midi.connected_controllers[controller_name]['current_preset'] = preset_id
-            success = True
-            
-            print(f"🎛️ {controller_type}: Preset {preset_id} ({preset_info['name']}) activado en canal {channel}")
-            
-    except Exception as e:
-        print(f"❌ Error activando preset: {e}")
+    # Calcular PC número basado en el rango del controlador
+    # Cada controlador tiene un rango de 8 presets
+    base_range = controller_info.get('preset_range_start', 0)
+    pc_number = base_range + preset_id
+    
+    print(f"🎛️ {controller_type}: Simulando MIDI PC {pc_number} para preset {preset_id} ({preset_info['name']})")
+    
+    # Usar simulación de MIDI Program Change (como MIDI Captain)
+    success = api.guitar_midi._simulate_midi_program_change(pc_number)
+    
+    if success:
+        # Actualizar preset actual del controlador
+        api.guitar_midi.connected_controllers[controller_name]['current_preset'] = preset_id
+        print(f"✅ {controller_type}: Preset {preset_id} activado mediante simulación MIDI")
+    else:
+        print(f"❌ Error en simulación MIDI para {controller_type} preset {preset_id}")
     
     return jsonify({
         'success': success,
@@ -311,7 +311,7 @@ def _set_original_controller_preset(controller_name, preset_id):
     })
 
 def _set_modular_controller_preset(controller_name, preset_id):
-    """Establecer preset en controlador modular (NUEVO)"""
+    """Establecer preset en controlador modular usando simulación MIDI"""
     controller = api.guitar_midi.active_controllers[controller_name]
     device_info = controller.get('device_info', {})
     presets = controller.get('presets', {})
@@ -324,29 +324,22 @@ def _set_modular_controller_preset(controller_name, preset_id):
         }), 400
     
     preset_info = presets[preset_id]
-    success = False
     
-    try:
-        if api.guitar_midi.fs and api.guitar_midi.sfid is not None:
-            channel = device_info.get('midi_channel', 0)
-            bank = preset_info.get('bank', 0)
-            program = preset_info.get('program', 0)
-            
-            # Aplicar preset en FluidSynth
-            result = api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
-            print(f"   🎹 program_select resultado: {result}")
-            
-            # Aplicar efectos después del cambio de preset
-            api.guitar_midi._apply_current_effects()
-            
-            # Actualizar preset actual del controlador
-            controller['current_preset'] = preset_id
-            success = True
-            
-            print(f"🎛️ {controller_name}: Preset {preset_id} ({preset_info['name']}) activado en canal {channel}")
-            
-    except Exception as e:
-        print(f"❌ Error activando preset modular: {e}")
+    # Calcular PC número basado en el rango del controlador
+    base_range = device_info.get('preset_range_start', 0)
+    pc_number = base_range + preset_id
+    
+    print(f"🎛️ {controller_name}: Simulando MIDI PC {pc_number} para preset {preset_id} ({preset_info.get('name', 'Unknown')})")
+    
+    # Usar simulación de MIDI Program Change (como MIDI Captain)
+    success = api.guitar_midi._simulate_midi_program_change(pc_number)
+    
+    if success:
+        # Actualizar preset actual del controlador
+        controller['current_preset'] = preset_id
+        print(f"✅ {controller_name}: Preset {preset_id} activado mediante simulación MIDI")
+    else:
+        print(f"❌ Error en simulación MIDI para {controller_name} preset {preset_id}")
     
     return jsonify({
         'success': success,

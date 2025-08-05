@@ -1300,6 +1300,23 @@ ctl.!default {
         except Exception as e:
             print(f"❌ Error aplicando efectos actuales: {e}")
     
+    def _simulate_midi_program_change(self, pc_number: int) -> bool:
+        """Simular mensaje MIDI Program Change internamente (como si viniera del MIDI Captain)"""
+        try:
+            print(f"🎛️ Simulando MIDI Program Change {pc_number} (como MIDI Captain)")
+            
+            # Crear mensaje MIDI Program Change (0xC0 + canal 0, programa pc_number)
+            midi_message = [0xC0, pc_number]  # Status 0xC0 = Program Change canal 0
+            
+            # Procesar el mensaje usando la misma función que MIDI Captain
+            self._handle_midi_message((midi_message, 0.0))
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error simulando MIDI Program Change: {e}")
+            return False
+    
     def _panic(self) -> bool:
         """Detener todas las notas (PANIC)"""
         try:
