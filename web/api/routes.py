@@ -86,9 +86,10 @@ def activate_instrument(pc):
             'error': f'Preset {pc} no existe'
         }), 404
     
-    # Usar simulación de MIDI Program Change (como MIDI Captain)
-    success = api.guitar_midi._simulate_midi_program_change(pc)
-    print(f"   Resultado simulación MIDI: {'✅ Éxito' if success else '❌ Error'}")
+    # 🚀 HACER EXACTAMENTE LO MISMO QUE EL MIDI CAPTAIN
+    print(f"   🎯 Llamando directamente a _set_instrument() como MIDI Captain")
+    success = api.guitar_midi._set_instrument(pc)
+    print(f"   Resultado _set_instrument: {'✅ Éxito' if success else '❌ Error'}")
     
     if success:
         # Emit WebSocket update
