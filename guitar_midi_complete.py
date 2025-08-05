@@ -1016,7 +1016,11 @@ ctl.!default {
             # Configurar presets iniciales del controlador en FluidSynth
             self._setup_controller_presets(controller_type)
             
+            # 🚀 CONFIGURAR MIDI OUTPUT PARA COMUNICACIÓN BIDIRECCIONAL
+            self._setup_midi_output(device_name, 0)
+            
             print(f"   🎛️ Registrado: {controller_type.replace('_', ' ').title()} ({device_name})")
+            print(f"   🔄 MIDI Output configurado para: {device_name}")
             
         except Exception as e:
             print(f"❌ Error registrando controlador {device_name}: {e}")
@@ -1105,45 +1109,57 @@ ctl.!default {
             }
     
     def _scan_current_midi_devices(self) -> List[str]:
-        """Escanear dispositivos MIDI conectados actualmente"""
+        """Escanear dispositivos MIDI conectados actualmente - COMPATIBLE WINDOWS/LINUX"""
         try:
-            import subprocess
+            import rtmidi
+            import platform
             
-            # Obtener lista actual de clientes MIDI usando aconnect
-            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True, timeout=3)
-            if result.returncode != 0:
-                return []
-            
-            # Parsear salida para encontrar dispositivos de entrada
             current_devices = []
-            lines = result.stdout.split('\n')
             
-            for line in lines:
-                line = line.strip()
-                if line.startswith('client ') and ':' in line:
-                    try:
-                        # Buscar patrones conocidos de controladores MIDI
-                        keywords = ['MIDI', 'MPK', 'Pico', 'Captain', 'Fishman', 'TriplePlay', 'UMC', 'Behringer']
-                        if any(keyword.lower() in line.lower() for keyword in keywords):
-                            
-                            # Extraer nombre del dispositivo de diferentes formatos
-                            if '[' in line:
-                                # Formato: client 24: 'MPK mini 3' [type=kernel,card=2]
-                                device_name = line.split("'")[1] if "'" in line else line.split('[')[0].split(':')[1].strip()
-                            else:
-                                # Formato simple: client 24: MPK mini 3
-                                device_name = line.split(':')[1].strip()
-                            
-                            # Limpiar nombre y validar
-                            device_name = device_name.replace("'", "").strip()
-                            
-                            if device_name and device_name not in ['System', 'Midi Through', 'Timer', 'Announce']:
-                                current_devices.append(device_name)
-                                
-                    except Exception as e:
-                        # Ignorar errores de parsing individual
-                        continue
+            # MÉTODO 1: Usar rtmidi (multiplataforma)
+            try:
+                midiin = rtmidi.MidiIn()
+                available_ports = midiin.get_ports()
+                
+                print(f"   🔍 DEBUG - Puertos MIDI Input detectados: {available_ports}")
+                
+                for port_name in available_ports:
+                    # Buscar patrones conocidos de controladores MIDI
+                    keywords = ['MIDI', 'MPK', 'Pico', 'Captain', 'Fishman', 'TriplePlay', 'UMC', 'Behringer', 'Akai', 'minilab']
+                    if any(keyword.lower() in port_name.lower() for keyword in keywords):
+                        # Extraer nombre limpio del dispositivo
+                        device_name = port_name
+                        
+                        # Filtrar nombres del sistema
+                        system_names = ['Microsoft GS Wavetable', 'MIDI Mapper', 'Timer', 'Announce']
+                        if not any(sys_name.lower() in device_name.lower() for sys_name in system_names):
+                            current_devices.append(device_name)
+                            print(f"   ✅ Controlador MIDI detectado: {device_name}")
+                
+                midiin.close_port()
+                
+            except Exception as e:
+                print(f"   ❌ Error con rtmidi: {e}")
             
+            # MÉTODO 2: aconnect en Linux (fallback)
+            if not current_devices and platform.system() == 'Linux':
+                try:
+                    import subprocess
+                    result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True, timeout=3)
+                    if result.returncode == 0:
+                        lines = result.stdout.split('\n')
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith('client ') and ':' in line:
+                                keywords = ['MIDI', 'MPK', 'Pico', 'Captain', 'Fishman', 'TriplePlay', 'UMC', 'Behringer']
+                                if any(keyword.lower() in line.lower() for keyword in keywords):
+                                    device_name = line.split(':')[1].strip().replace("'", "")
+                                    if device_name not in ['System', 'Midi Through', 'Timer', 'Announce']:
+                                        current_devices.append(device_name)
+                except:
+                    pass
+            
+            print(f"   📋 Dispositivos MIDI encontrados: {current_devices}")
             return current_devices
             
         except Exception as e:
@@ -1474,11 +1490,17 @@ ctl.!default {
             if not self.fs:
                 return
             
+            # 🔍 DEBUG: Mostrar estado de controladores
+            print(f"   🔍 DEBUG - Controladores activos: {list(self.active_controllers.keys())}")
+            print(f"   🔍 DEBUG - Controladores conectados: {list(self.connected_controllers.keys())}")
+            print(f"   🔍 DEBUG - MIDI outputs disponibles: {list(self.midi_outputs.keys())}")
+            print(f"   🔍 DEBUG - Preset actual: {self.current_instrument}")
+            
             # Determinar qué controlador está activo
             active_controller_channel = None
             active_controller_name = None
             
-            # Método 1: Buscar controlador con preset actual activo
+            # Método 1: Buscar controlador con preset actual activo en active_controllers
             for controller_name, controller in self.active_controllers.items():
                 if controller.get('current_preset') == self.current_instrument:
                     device_info = controller.get('device_info', {})
@@ -1486,7 +1508,17 @@ ctl.!default {
                     active_controller_name = controller_name
                     break
             
-            # Método 2: Aplicar al último controlador detectado (fallback)
+            # Método 2: Buscar en connected_controllers (detectados por rtmidi)
+            if active_controller_channel is None and self.connected_controllers:
+                for controller_name, controller_info in self.connected_controllers.items():
+                    if controller_info.get('connected', False):
+                        # Usar el canal basado en el preset actual
+                        active_controller_channel = self.current_instrument % 16
+                        active_controller_name = controller_name
+                        print(f"   🎯 Usando controlador conectado: {controller_name} (canal {active_controller_channel})")
+                        break
+            
+            # Método 3: Aplicar al último controlador detectado (active_controllers fallback)
             if active_controller_channel is None and self.active_controllers:
                 controller_name = list(self.active_controllers.keys())[0]  # Primer controlador
                 controller = self.active_controllers[controller_name]
