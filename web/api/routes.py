@@ -219,13 +219,30 @@ def get_controllers():
 
 @api.route('/controllers/<controller_name>/preset/<int:preset_id>', methods=['POST'])
 def set_controller_preset(controller_name, preset_id):
-    """Set preset for specific controller"""
-    if controller_name not in api.guitar_midi.connected_controllers:
+    """Set preset for specific controller (original + modular)"""
+    try:
+        # Verificar en controladores originales
+        if controller_name in api.guitar_midi.connected_controllers:
+            return _set_original_controller_preset(controller_name, preset_id)
+        
+        # Verificar en controladores modulares (NUEVO)
+        if controller_name in api.guitar_midi.active_controllers:
+            return _set_modular_controller_preset(controller_name, preset_id)
+        
         return jsonify({
             'success': False, 
             'error': f'Controller {controller_name} not found'
         }), 404
-    
+        
+    except Exception as e:
+        print(f"❌ Error estableciendo preset {preset_id} en {controller_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+def _set_original_controller_preset(controller_name, preset_id):
+    """Establecer preset en controlador original"""
     controller_info = api.guitar_midi.connected_controllers[controller_name]
     controller_type = controller_info['type']
     
@@ -271,27 +288,90 @@ def set_controller_preset(controller_name, preset_id):
         'preset_name': preset_info['name'] if success else None
     })
 
+def _set_modular_controller_preset(controller_name, preset_id):
+    """Establecer preset en controlador modular (NUEVO)"""
+    controller = api.guitar_midi.active_controllers[controller_name]
+    device_info = controller.get('device_info', {})
+    presets = controller.get('presets', {})
+    
+    # Verificar que el preset existe
+    if preset_id not in presets:
+        return jsonify({
+            'success': False,
+            'error': f'Preset {preset_id} not available for {controller_name}'
+        }), 400
+    
+    preset_info = presets[preset_id]
+    success = False
+    
+    try:
+        if api.guitar_midi.fs and api.guitar_midi.sfid is not None:
+            channel = device_info.get('midi_channel', 0)
+            bank = preset_info.get('bank', 0)
+            program = preset_info.get('program', 0)
+            
+            # Aplicar preset en FluidSynth
+            api.guitar_midi.fs.program_select(channel, api.guitar_midi.sfid, bank, program)
+            
+            # Actualizar preset actual del controlador
+            controller['current_preset'] = preset_id
+            success = True
+            
+            print(f"🎛️ {controller_name}: Preset {preset_id} ({preset_info['name']}) activado en canal {channel}")
+            
+    except Exception as e:
+        print(f"❌ Error activando preset modular: {e}")
+    
+    return jsonify({
+        'success': success,
+        'controller': controller_name,
+        'preset_id': preset_id,
+        'preset_name': preset_info.get('name', 'Unknown') if success else None
+    })
+
 @api.route('/controllers/<controller_name>/presets', methods=['GET'])
 def get_controller_presets(controller_name):
-    """Get presets for specific controller"""
-    if controller_name not in api.guitar_midi.connected_controllers:
+    """Get presets for specific controller (original + modular)"""
+    try:
+        # Verificar en controladores originales
+        if controller_name in api.guitar_midi.connected_controllers:
+            controller_info = api.guitar_midi.connected_controllers[controller_name]
+            controller_type = controller_info['type']
+            presets = api.guitar_midi.controller_presets.get(controller_type, {})
+            
+            return jsonify({
+                'success': True,
+                'controller': controller_name,
+                'controller_type': controller_type,
+                'current_preset': controller_info['current_preset'],
+                'presets': presets
+            })
+        
+        # Verificar en controladores modulares (NUEVO)
+        if controller_name in api.guitar_midi.active_controllers:
+            controller = api.guitar_midi.active_controllers[controller_name]
+            device_info = controller.get('device_info', {})
+            presets = controller.get('presets', {})
+            
+            return jsonify({
+                'success': True,
+                'controller': controller_name,
+                'controller_type': device_info.get('type', 'unknown'),
+                'current_preset': controller.get('current_preset', 0),
+                'presets': presets
+            })
+        
         return jsonify({
             'success': False, 
             'error': f'Controller {controller_name} not found'
         }), 404
-    
-    controller_info = api.guitar_midi.connected_controllers[controller_name]
-    controller_type = controller_info['type']
-    
-    presets = api.guitar_midi.controller_presets.get(controller_type, {})
-    
-    return jsonify({
-        'success': True,
-        'controller': controller_name,
-        'controller_type': controller_type,
-        'current_preset': controller_info['current_preset'],
-        'presets': presets
-    })
+        
+    except Exception as e:
+        print(f"❌ Error obteniendo presets de {controller_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @api.route('/controllers/types', methods=['GET'])
 def get_controller_types():

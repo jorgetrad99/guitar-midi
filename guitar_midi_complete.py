@@ -1428,11 +1428,11 @@ ctl.!default {
             
             print(f"   📡 Escaneando {len(available_ports)} puertos MIDI...")
             
-            # Patrones de detección
+            # Patrones de detección (CORREGIDOS para tus dispositivos)
             device_patterns = {
-                'akai_mpk_mini': [r'.*MPK.*Mini.*', r'.*Akai.*MPK.*', r'MPK.*Mini.*', r'.*AKAI.*MPK.*'],
+                'akai_mpk_mini': [r'.*MPK.*mini.*', r'.*MPK.*Mini.*', r'.*Akai.*MPK.*', r'MPK.*mini.*3.*', r'.*AKAI.*MPK.*'],
+                'midi_captain': [r'.*Pico.*', r'.*Captain.*', r'.*MIDI.*Captain.*', r'Pico.*Captain.*', r'.*Pico.*MIDI.*'],
                 'fishman_tripleplay': [r'.*Fishman.*Triple.*', r'.*TriplePlay.*', r'.*Fishman.*'],
-                'midi_captain': [r'.*Captain.*', r'.*MIDI.*Captain.*', r'Pico.*Captain.*'],
                 'mvave_pocket': [r'.*MVAVE.*Pocket.*', r'.*Pocket.*MVAVE.*', r'MVAVE.*'],
                 'hexaphonic': [r'.*HEX.*', r'.*Hexaphonic.*', r'.*Guitar.*Synth.*'],
                 'generic_midi': [r'.*']  # Catch-all para otros dispositivos
