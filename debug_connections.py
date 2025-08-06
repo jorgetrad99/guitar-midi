@@ -27,7 +27,7 @@ def check_midi_connections():
                 print(line)
                 
                 # Identificar controladores
-                if 'client' in line and any(keyword in line.lower() for keyword in ['pico', 'captain', 'mpk', 'akai', 'mvave']):
+                if 'client' in line and any(keyword in line.lower() for keyword in ['pico', 'captain', 'mpk', 'akai', 'mvave', 'sinco', 'usb device']):
                     try:
                         client_num = line.split('client ')[1].split(':')[0]
                         device_name = line.split("'")[1] if "'" in line else line.split(':')[1].strip()
@@ -37,7 +37,7 @@ def check_midi_connections():
                         pass
                 
                 # Identificar FluidSynth
-                if 'FLUID' in line and 'Synth input' in line:
+                if 'FLUID Synth' in line and 'client' in line:
                     try:
                         client_num = line.split('client ')[1].split(':')[0]
                         fluidsynth_clients.append(client_num)

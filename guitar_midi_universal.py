@@ -74,6 +74,9 @@ class UniversalMIDISystem:
             # 3. Auto-conectar a FluidSynth
             self.auto_connect_to_fluidsynth()
             
+            # 3.5. Forzar conexiones críticas
+            self.force_critical_connections()
+            
             # 4. Configurar MIDI bidireccional
             self.setup_midi_io()
             
@@ -216,6 +219,102 @@ class UniversalMIDISystem:
         except Exception as e:
             print(f"❌ Error auto-conectando: {e}")
     
+    def force_critical_connections(self):
+        """Forzar conexiones críticas de controladores a FluidSynth"""
+        try:
+            print("\n🔧 Forzando conexiones críticas...")
+            
+            if not self.fluidsynth_client:
+                print("❌ No hay cliente FluidSynth disponible")
+                return
+            
+            if not self.connected_controllers:
+                print("❌ No hay controladores detectados")
+                return
+            
+            # Verificar y forzar cada conexión crítica
+            forced_count = 0
+            for controller in self.connected_controllers:
+                try:
+                    client_num = controller["client"]
+                    controller_name = controller["name"]
+                    
+                    # Desconectar primero (por si hay conexión problemática)
+                    disconnect_cmd = ['aconnect', '-d', f'{client_num}:0', f'{self.fluidsynth_client}:0']
+                    subprocess.run(disconnect_cmd, capture_output=True, text=True)
+                    
+                    # Conectar con fuerza
+                    connect_cmd = ['aconnect', f'{client_num}:0', f'{self.fluidsynth_client}:0']
+                    result = subprocess.run(connect_cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        print(f"🔗 FORZADO: {controller_name} ({client_num}) → FluidSynth ({self.fluidsynth_client})")
+                        forced_count += 1
+                    else:
+                        error_msg = result.stderr.strip() if result.stderr else "Error desconocido"
+                        print(f"❌ Error forzando {controller_name}: {error_msg}")
+                        
+                except Exception as e:
+                    print(f"❌ Excepción forzando {controller.get('name', 'unknown')}: {e}")
+            
+            print(f"🔧 {forced_count}/{len(self.connected_controllers)} conexiones forzadas")
+            
+            # Verificar conexiones finales
+            time.sleep(0.5)
+            self._verify_connections()
+            
+        except Exception as e:
+            print(f"❌ Error en force_critical_connections: {e}")
+    
+    def _verify_connections(self):
+        """Verificar estado final de las conexiones"""
+        try:
+            print("\n🔍 Verificando conexiones finales...")
+            
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("❌ Error ejecutando aconnect -l")
+                return
+            
+            connected_controllers = []
+            lines = result.stdout.split('\n')
+            
+            for i, line in enumerate(lines):
+                # Buscar controladores conocidos
+                if 'client' in line and any(keyword in line.lower() for keyword in 
+                                          ['pico', 'captain', 'mpk', 'akai', 'mvave']):
+                    try:
+                        client_num = line.split('client ')[1].split(':')[0]
+                        device_name = line.split("'")[1] if "'" in line else line.split(':')[1].strip()
+                        
+                        # Buscar conexiones en las líneas siguientes
+                        is_connected = False
+                        for j in range(i+1, min(i+5, len(lines))):
+                            if ('Connected' in lines[j] or 'Connecting' in lines[j]) and self.fluidsynth_client in lines[j]:
+                                is_connected = True
+                                break
+                            elif 'client' in lines[j]:
+                                break
+                        
+                        status = "✅ CONECTADO" if is_connected else "❌ DESCONECTADO"
+                        print(f"   {status}: {device_name} (cliente {client_num})")
+                        
+                        if is_connected:
+                            connected_controllers.append(device_name)
+                            
+                    except Exception as e:
+                        continue
+            
+            print(f"\n📊 Resultado: {len(connected_controllers)}/{len(self.connected_controllers)} controladores conectados a FluidSynth")
+            
+            if len(connected_controllers) == len(self.connected_controllers):
+                print("🎉 ¡Todas las conexiones están funcionando!")
+            else:
+                print("⚠️  Algunos controladores no están conectados correctamente")
+            
+        except Exception as e:
+            print(f"❌ Error verificando conexiones: {e}")
+    
     def setup_midi_io(self):
         """Configurar MIDI Input/Output bidireccional"""
         try:
@@ -297,23 +396,15 @@ class UniversalMIDISystem:
                     return False
                 print(f"✅ Sonido: {preset_info['name']}")
                 
-                # 🎵 TOCAR NOTA DE DEMOSTRACIÓN PARA ESCUCHAR EL NUEVO PRESET
+                # 🎵 TOCAR NOTA DE DEMOSTRACIÓN EN HILO SEPARADO (NO BLOQUEAR WEB)
                 if self.play_demo:
-                    try:
-                        # Tocar acorde corto para demostrar el nuevo sonido
-                        notes = [60, 64, 67]  # C-E-G (C major chord)
-                        for note in notes:
-                            self.fs.noteon(0, note, 80)  # Velocity 80
-                        
-                        time.sleep(0.8)  # Duración del acorde
-                        
-                        for note in notes:
-                            self.fs.noteoff(0, note)
-                        
-                        print(f"🎵 Demostración tocada: {preset_info['name']}")
-                        
-                    except Exception as e:
-                        print(f"⚠️  Error tocando demostración: {e}")
+                    demo_thread = threading.Thread(
+                        target=self.play_demo_sound, 
+                        args=(preset_info['name'],), 
+                        daemon=True
+                    )
+                    demo_thread.start()
+                    # No esperar - el hilo se ejecuta independientemente
                 else:
                     print(f"🔇 Demostración desactivada")
             
@@ -346,6 +437,31 @@ class UniversalMIDISystem:
         except Exception as e:
             print(f"❌ Error cambiando preset: {e}")
             return False
+    
+    def play_demo_sound(self, preset_name: str):
+        """Tocar demostración en hilo separado para no bloquear la web"""
+        try:
+            if not self.fs:
+                return
+                
+            # Tocar acorde corto para demostrar el nuevo sonido
+            notes = [60, 64, 67]  # C-E-G (C major chord)
+            
+            # Encender notas
+            for note in notes:
+                self.fs.noteon(0, note, 80)  # Velocity 80
+            
+            # Esperar (sin bloquear el hilo principal)
+            time.sleep(0.8)
+            
+            # Apagar notas
+            for note in notes:
+                self.fs.noteoff(0, note)
+            
+            print(f"🎵 Demostración completada: {preset_name}")
+            
+        except Exception as e:
+            print(f"⚠️  Error en demostración: {e}")
     
     def test_audio(self):
         """Probar que FluidSynth esté enviando audio correctamente"""
