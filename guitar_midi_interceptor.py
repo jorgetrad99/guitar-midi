@@ -300,41 +300,65 @@ class MIDIInterceptor:
                     self.change_preset(preset)
 
     def change_preset(self, preset_num: int):
-        """Cambiar preset - INMEDIATO"""
+        """Cambiar preset - INMEDIATO CON FEEDBACK"""
         try:
+            print(f"\n🎵 CAMBIANDO PRESET {preset_num}...")
+            
             if preset_num not in self.presets:
+                print(f"❌ Preset {preset_num} no existe")
                 return False
             
             preset_info = self.presets[preset_num]
-            print(f"\n🎵 CAMBIANDO A: {preset_num} - {preset_info['name']}")
+            print(f"   📋 Info: {preset_info}")
             
             # Cambiar en FluidSynth
             if self.fs and self.sfid is not None:
-                result = self.fs.program_select(0, self.sfid, 0, preset_info['program'])
+                print(f"   🎹 Aplicando program {preset_info['program']} bank {preset_info['bank']}")
+                result = self.fs.program_select(0, self.sfid, preset_info['bank'], preset_info['program'])
+                
                 if result == 0:
-                    print(f"✅ FluidSynth: {preset_info['name']}")
-                    
-                    # Tocar nota de confirmación
-                    self.fs.noteon(0, 60, 100)
-                    time.sleep(0.1)
-                    self.fs.noteoff(0, 60)
-                    
                     self.current_preset = preset_num
+                    self.last_activity = time.time()
                     
-                    # Notificar web
-                    if hasattr(self, 'socketio'):
-                        self.socketio.emit('preset_changed', {
-                            'preset': preset_num,
-                            'name': preset_info['name']
-                        })
+                    print(f"   ✅ FluidSynth OK: {preset_info['name']}")
+                    
+                    # Tocar nota de confirmación EN HILO SEPARADO
+                    def play_confirmation():
+                        try:
+                            self.fs.noteon(0, 60, 100)
+                            time.sleep(0.15)
+                            self.fs.noteoff(0, 60)
+                            print(f"   🎵 Nota de confirmación tocada")
+                        except Exception as e:
+                            print(f"   ⚠️ Error nota confirmación: {e}")
+                    
+                    threading.Thread(target=play_confirmation, daemon=True).start()
+                    
+                    # Notificar web interface
+                    try:
+                        if hasattr(self, 'socketio'):
+                            self.socketio.emit('preset_changed', {
+                                'preset': preset_num,
+                                'name': preset_info['name'],
+                                'category': preset_info['category'],
+                                'icon': preset_info['icon']
+                            })
+                            print(f"   📡 WebSocket notification sent")
+                    except Exception as e:
+                        print(f"   ⚠️ Error WebSocket: {e}")
                     
                     return True
                 else:
-                    print(f"❌ Error FluidSynth: {result}")
+                    print(f"   ❌ Error FluidSynth program_select: {result}")
                     return False
+            else:
+                print(f"   ❌ FluidSynth no disponible (fs={self.fs}, sfid={self.sfid})")
+                return False
             
         except Exception as e:
-            print(f"❌ Error cambiando preset: {e}")
+            print(f"❌ Error cambiando preset {preset_num}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def detect_controllers(self):
@@ -905,12 +929,14 @@ class MIDIInterceptor:
                     // Inicializar sistema
                     async function initSystem() {
                         try {
+                            console.log('🔄 Inicializando sistema...');
                             const response = await fetch('/api/status');
                             const data = await response.json();
+                            console.log('📊 Datos recibidos:', data);
                             systemData = data;
                             updateUI(data);
                         } catch (error) {
-                            console.error('Error inicializando:', error);
+                            console.error('❌ Error inicializando:', error);
                         }
                     }
                     
@@ -937,24 +963,41 @@ class MIDIInterceptor:
                     }
                     
                     function updatePresetsGrid(presets) {
+                        console.log('🎛️ Actualizando grid de presets:', presets);
                         const grid = document.getElementById('presets-grid');
                         grid.innerHTML = '';
                         
+                        if (!presets) {
+                            console.error('❌ No hay presets para mostrar');
+                            return;
+                        }
+                        
                         for (let i = 0; i < 8; i++) {
                             const preset = presets[i];
+                            if (!preset) {
+                                console.error(`❌ Preset ${i} no existe`);
+                                continue;
+                            }
+                            
+                            console.log(`✅ Creando preset ${i}:`, preset);
                             const card = document.createElement('div');
                             card.className = `preset-card ${i === currentPreset ? 'active' : ''}`;
-                            card.onclick = () => changePreset(i);
+                            card.onclick = () => {
+                                console.log(`🎯 Cambiando a preset ${i}`);
+                                changePreset(i);
+                            };
                             
                             card.innerHTML = `
                                 <div class="preset-number">${i}</div>
-                                <div class="preset-icon">${preset.icon}</div>
-                                <div class="preset-name">${preset.name}</div>
-                                <div class="preset-category">${preset.category}</div>
+                                <div class="preset-icon">${preset.icon || '🎵'}</div>
+                                <div class="preset-name">${preset.name || 'Preset ' + i}</div>
+                                <div class="preset-category">${preset.category || 'Unknown'}</div>
                             `;
                             
                             grid.appendChild(card);
                         }
+                        
+                        console.log(`✅ Grid actualizado con ${grid.children.length} presets`);
                     }
                     
                     function updateMIDIControllers(controllers) {
@@ -1011,15 +1054,31 @@ class MIDIInterceptor:
                     // Cambiar preset
                     async function changePreset(preset) {
                         try {
+                            console.log(`🎯 Cambiando a preset ${preset}...`);
+                            
+                            // Feedback visual inmediato
+                            document.querySelectorAll('.preset-card').forEach(card => card.classList.remove('active'));
+                            document.querySelectorAll('.preset-card')[preset]?.classList.add('active');
+                            
                             const response = await fetch(`/api/preset/${preset}`, {
                                 method: 'POST'
                             });
                             const data = await response.json();
+                            console.log(`📡 Respuesta servidor:`, data);
+                            
                             if (data.success) {
-                                // La actualización llegará por WebSocket
+                                console.log(`✅ Preset ${preset} cambiado: ${data.name}`);
+                                // Actualizar display inmediatamente
+                                document.getElementById('current-number').textContent = preset;
+                                document.getElementById('current-name').textContent = data.name;
+                                currentPreset = preset;
+                            } else {
+                                console.error(`❌ Error cambiando preset ${preset}`);
+                                alert(`Error cambiando a preset ${preset}`);
                             }
                         } catch (error) {
-                            console.error('Error cambiando preset:', error);
+                            console.error('❌ Error cambiando preset:', error);
+                            alert('Error de conexión al cambiar preset');
                         }
                     }
                     
@@ -1044,13 +1103,21 @@ class MIDIInterceptor:
                     
                     async function setVolume(type, value) {
                         try {
-                            await fetch('/api/volume', {
+                            console.log(`🔊 Configurando ${type} = ${value}`);
+                            const response = await fetch('/api/volume', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ type, value: parseInt(value) })
                             });
+                            const data = await response.json();
+                            console.log(`📡 Respuesta volumen:`, data);
+                            if (data.success) {
+                                console.log(`✅ Volumen ${type} configurado a ${value}`);
+                            } else {
+                                console.error(`❌ Error configurando volumen ${type}`);
+                            }
                         } catch (error) {
-                            console.error('Error configurando volumen:', error);
+                            console.error('❌ Error configurando volumen:', error);
                         }
                     }
                     
@@ -1117,18 +1184,69 @@ class MIDIInterceptor:
         
         @self.app.route('/api/preset/<int:preset>', methods=['POST'])
         def api_change_preset(preset):
-            success = self.change_preset(preset)
-            return jsonify({
-                'success': success,
-                'preset': preset,
-                'name': self.presets[preset]['name'] if success else None
-            })
+            print(f"🌐 API: Cambio de preset {preset} solicitado")
+            try:
+                if preset not in self.presets:
+                    print(f"❌ API: Preset {preset} no válido")
+                    return jsonify({
+                        'success': False,
+                        'error': f'Preset {preset} no existe',
+                        'available_presets': list(self.presets.keys())
+                    }), 400
+                
+                success = self.change_preset(preset)
+                preset_info = self.presets[preset]
+                
+                response_data = {
+                    'success': success,
+                    'preset': preset,
+                    'name': preset_info['name'],
+                    'category': preset_info['category'],
+                    'icon': preset_info['icon'],
+                    'program': preset_info['program'],
+                    'timestamp': time.time()
+                }
+                
+                print(f"📡 API Response: {response_data}")
+                return jsonify(response_data)
+                
+            except Exception as e:
+                print(f"❌ Error en API preset: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
         
         @self.app.route('/api/volume', methods=['POST'])
         def api_set_volume():
-            data = request.get_json()
-            success = self.set_volume(data.get('type'), data.get('value'))
-            return jsonify({'success': success})
+            try:
+                data = request.get_json()
+                print(f"🔊 API Volume: {data}")
+                
+                if not data:
+                    return jsonify({'success': False, 'error': 'No data provided'}), 400
+                
+                volume_type = data.get('type')
+                value = data.get('value')
+                
+                if not volume_type or value is None:
+                    return jsonify({'success': False, 'error': 'Missing type or value'}), 400
+                
+                success = self.set_volume(volume_type, value)
+                
+                response = {
+                    'success': success,
+                    'type': volume_type,
+                    'value': value,
+                    'timestamp': time.time()
+                }
+                
+                print(f"📡 Volume Response: {response}")
+                return jsonify(response)
+                
+            except Exception as e:
+                print(f"❌ Error API volume: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
         
         @self.app.route('/api/preset/<int:preset_id>', methods=['PUT'])
         def api_update_preset(preset_id):
