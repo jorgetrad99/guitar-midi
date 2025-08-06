@@ -308,35 +308,97 @@ class MIDIInterceptor:
             print(f"❌ Error MIDI input: {e}")
 
     def intercept_midi(self, message, data):
-        """INTERCEPTAR Y REENVIAR - AQUÍ ESTÁ LA MAGIA"""
-        msg, _ = message
-        
-        if len(msg) >= 1:
-            command = msg[0] & 0xF0
-            channel = msg[0] & 0x0F
+        """🎵 INTERCEPTAR Y REENVIAR - CON CONTROL DE VOLUMEN REAL"""
+        try:
+            msg, _ = message
             
-            # INTERCEPTAR NOTAS (Note On/Off)
-            if command == 0x90 and len(msg) >= 3:  # Note On
-                note = msg[1]
-                velocity = msg[2]
+            if len(msg) >= 1:
+                command = msg[0] & 0xF0
+                channel = msg[0] & 0x0F
                 
-                if velocity > 0:  # Note On real
-                    # REENVIAR A FLUIDSYNTH CON PRESET CORRECTO
-                    self.fs.noteon(0, note, velocity)  # Siempre canal 0
-                    print(f"🎵 Interceptado y reenviado: nota {note}, vel {velocity} -> preset {self.current_preset}")
-                else:  # Note Off (velocity 0)
-                    self.fs.noteoff(0, note)
-            
-            elif command == 0x80 and len(msg) >= 2:  # Note Off explícito
-                note = msg[1]
-                self.fs.noteoff(0, note)
-            
-            # INTERCEPTAR PROGRAM CHANGE DEL CONTROLADOR
-            elif command == 0xC0 and len(msg) >= 2:
-                preset = msg[1]
-                if 0 <= preset <= 7:
-                    print(f"🎛️ Program Change interceptado: {preset}")
-                    self.change_preset(preset)
+                # INTERCEPTAR NOTAS (Note On/Off) CON VOLUMEN
+                if command == 0x90 and len(msg) >= 3:  # Note On
+                    note = msg[1]
+                    original_velocity = msg[2]
+                    
+                    if original_velocity > 0:  # Note On real
+                        # APLICAR VOLÚMENES INTERCEPTADOS
+                        final_velocity = self._calculate_velocity(original_velocity)
+                        
+                        # REENVIAR A FLUIDSYNTH CON VOLUMEN APLICADO
+                        if self.fs:
+                            self.fs.noteon(0, note, final_velocity)
+                            
+                        # Debug detallado solo si hay diferencia significativa
+                        if abs(final_velocity - original_velocity) > 5:
+                            print(f"🎚️ Nota {note}: velocity {original_velocity} → {final_velocity} (preset {self.current_preset})")
+                        
+                        # Actualizar actividad
+                        self.last_activity = time.time()
+                            
+                    else:  # Note Off (velocity 0)
+                        if self.fs:
+                            self.fs.noteoff(0, note)
+                
+                elif command == 0x80 and len(msg) >= 2:  # Note Off explícito
+                    note = msg[1]
+                    if self.fs:
+                        self.fs.noteoff(0, note)
+                
+                # INTERCEPTAR CONTROL CHANGE (CC) - volumen, expresión, etc.
+                elif command == 0xB0 and len(msg) >= 3:  # Control Change
+                    controller = msg[1]
+                    value = msg[2]
+                    
+                    # CC 7 = Channel Volume
+                    if controller == 7:
+                        print(f"🎚️ CC Volume interceptado: {value}")
+                        # Aplicar como volumen del preset actual
+                        volume_percent = int((value / 127.0) * 100)
+                        self.set_volume(f'preset_{self.current_preset}', volume_percent)
+                        
+                        # Notificar cambio a web interface
+                        if hasattr(self, 'socketio'):
+                            self.socketio.emit('volume_changed', {
+                                'type': f'preset_{self.current_preset}',
+                                'value': volume_percent
+                            })
+                    
+                    # CC 11 = Expression
+                    elif controller == 11:
+                        print(f"🎚️ CC Expression interceptado: {value}")
+                        # Aplicar como input gain
+                        expression_percent = int((value / 127.0) * 100)
+                        self.set_volume('input_gain', expression_percent)
+                        
+                        # Notificar cambio a web interface
+                        if hasattr(self, 'socketio'):
+                            self.socketio.emit('volume_changed', {
+                                'type': 'input_gain', 
+                                'value': expression_percent
+                            })
+                
+                # INTERCEPTAR PROGRAM CHANGE DEL CONTROLADOR
+                elif command == 0xC0 and len(msg) >= 2:
+                    preset = msg[1]
+                    if 0 <= preset <= 7:
+                        print(f"🎛️ Program Change interceptado: {preset}")
+                        self.change_preset(preset)
+                
+                # INTERCEPTAR PITCH BEND
+                elif command == 0xE0 and len(msg) >= 3:  # Pitch Bend
+                    lsb = msg[1]
+                    msb = msg[2]
+                    pitch_value = (msb << 7) | lsb
+                    # El pitch bend se pasa directo a FluidSynth
+                    if self.fs:
+                        pitch_bend = pitch_value - 8192  # Center at 0
+                        self.fs.pitch_bend(0, pitch_bend)
+        
+        except Exception as e:
+            print(f"⚠️ Error interceptando MIDI: {e}")
+            import traceback
+            traceback.print_exc()
 
     def change_preset(self, preset_num: int):
         """Cambiar preset - INMEDIATO CON FEEDBACK"""
@@ -529,34 +591,102 @@ class MIDIInterceptor:
             return False
 
     def set_volume(self, volume_type: str, value: int):
-        """🔊 Controlar volúmenes del sistema"""
+        """🔊 Controlar volúmenes del sistema - REAL CON INTERCEPTOR"""
         try:
+            print(f"🔊 Configurando volumen {volume_type} = {value}")
+            
             if volume_type == 'master':
                 self.volumes['master'] = max(0, min(100, value))
-                # Aplicar volumen master a FluidSynth
+                print(f"   🎚️ Master volume: {self.volumes['master']}%")
+                
+                # Aplicar volumen master con FluidSynth gain
                 if self.fs:
-                    # FluidSynth volume control (0.0 to 1.0)
-                    volume_float = self.volumes['master'] / 100.0
-                    # Nota: FluidSynth no tiene control directo de volumen master
-                    # Se implementaría con gain en cada nota
+                    # FluidSynth gain (0.0 to 10.0, default 0.2)
+                    gain_value = (self.volumes['master'] / 100.0) * 0.5  # Escala a rango reasonable
+                    try:
+                        # Intentar configurar ganancia en FluidSynth
+                        self.fs.setting('synth.gain', gain_value)
+                        print(f"   ✅ FluidSynth gain configurado: {gain_value}")
+                    except Exception as e:
+                        print(f"   ⚠️ No se pudo configurar FluidSynth gain: {e}")
                     
             elif volume_type == 'input_gain':
                 self.volumes['input_gain'] = max(0, min(100, value))
+                print(f"   🎤 Input gain: {self.volumes['input_gain']}%")
                 
             elif volume_type == 'output_level':
                 self.volumes['output_level'] = max(0, min(100, value))
+                print(f"   🔊 Output level: {self.volumes['output_level']}%")
+                
+                # Aplicar nivel de salida con comando de sistema
+                try:
+                    volume_percent = max(0, min(100, value))
+                    subprocess.run(['amixer', 'set', 'Master', f'{volume_percent}%'], 
+                                 capture_output=True, timeout=2)
+                    print(f"   ✅ Volumen sistema configurado: {volume_percent}%")
+                except Exception as e:
+                    print(f"   ⚠️ No se pudo configurar volumen sistema: {e}")
                 
             elif volume_type.startswith('preset_'):
                 preset_id = int(volume_type.split('_')[1])
                 if preset_id in self.presets:
                     self.volumes['preset_volumes'][preset_id] = max(0, min(100, value))
                     self.presets[preset_id]['volume'] = value
+                    print(f"   🎛️ Preset {preset_id} volume: {value}%")
+                    
+                    # Si es el preset actual, aplicar volumen inmediatamente
+                    if preset_id == self.current_preset:
+                        self._apply_preset_volume(preset_id, value)
             
+            # Actualizar actividad
+            self.last_activity = time.time()
             return True
             
         except Exception as e:
             print(f"❌ Error configurando volumen {volume_type}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+    
+    def _apply_preset_volume(self, preset_id: int, volume: int):
+        """🎚️ Aplicar volumen específico del preset"""
+        try:
+            print(f"🎚️ Aplicando volumen {volume}% al preset {preset_id}")
+            
+            # El volumen se aplicará en el interceptor MIDI
+            # No hay forma directa de cambiar volumen por canal en FluidSynth
+            # Se implementa en intercept_midi con velocity scaling
+            
+        except Exception as e:
+            print(f"❌ Error aplicando volumen preset: {e}")
+    
+    def _calculate_velocity(self, original_velocity: int) -> int:
+        """🎵 Calcular velocity final aplicando volúmenes"""
+        try:
+            # Volumen base
+            velocity = original_velocity
+            
+            # Aplicar input gain
+            input_factor = self.volumes['input_gain'] / 100.0
+            velocity = int(velocity * input_factor)
+            
+            # Aplicar volumen master  
+            master_factor = self.volumes['master'] / 100.0
+            velocity = int(velocity * master_factor)
+            
+            # Aplicar volumen del preset actual
+            if self.current_preset in self.volumes['preset_volumes']:
+                preset_factor = self.volumes['preset_volumes'][self.current_preset] / 100.0
+                velocity = int(velocity * preset_factor)
+            
+            # Mantener en rango MIDI válido
+            velocity = max(1, min(127, velocity))
+            
+            return velocity
+            
+        except Exception as e:
+            print(f"❌ Error calculando velocity: {e}")
+            return original_velocity
 
     def setup_routes(self):
         """🌐 Interfaz Web Profesional Completa"""
@@ -644,6 +774,16 @@ class MIDIInterceptor:
                     @keyframes pulse {
                         0%, 100% { opacity: 1; }
                         50% { opacity: 0.5; }
+                    }
+                    
+                    @keyframes slideInRight {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    
+                    @keyframes slideOutRight {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
                     }
                     
                     /* SIDEBAR IZQUIERDO - CONTROLADORES */
@@ -1351,6 +1491,39 @@ class MIDIInterceptor:
                         updatePresetsGrid(systemData.presets || {});
                         document.getElementById('current-number').textContent = data.preset;
                         document.getElementById('current-name').textContent = data.name;
+                    });
+                    
+                    socket.on('volume_changed', (data) => {
+                        console.log('🎚️ Volumen cambiado por controlador:', data);
+                        
+                        // Actualizar sliders en la interfaz
+                        if (data.type === 'master') {
+                            document.getElementById('master-volume').value = data.value;
+                            document.getElementById('master-value').textContent = data.value;
+                        } else if (data.type === 'input_gain') {
+                            document.getElementById('input-gain').value = data.value;
+                            document.getElementById('input-value').textContent = data.value;
+                        } else if (data.type === 'output_level') {
+                            document.getElementById('output-level').value = data.value;
+                            document.getElementById('output-value').textContent = data.value;
+                        }
+                        
+                        // Mostrar feedback visual
+                        const notification = document.createElement('div');
+                        notification.style.cssText = `
+                            position: fixed; top: 20px; right: 20px; z-index: 1000;
+                            background: rgba(74, 144, 226, 0.9); color: white;
+                            padding: 10px 15px; border-radius: 6px; font-size: 14px;
+                            animation: slideInRight 0.3s ease;
+                        `;
+                        notification.textContent = `🎚️ ${data.type.replace('_', ' ')}: ${data.value}%`;
+                        document.body.appendChild(notification);
+                        
+                        // Remover después de 2 segundos
+                        setTimeout(() => {
+                            notification.style.animation = 'slideOutRight 0.3s ease';
+                            setTimeout(() => notification.remove(), 300);
+                        }, 2000);
                     });
                     
                     socket.on('system_status', (data) => {
