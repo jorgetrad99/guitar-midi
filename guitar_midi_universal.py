@@ -372,12 +372,28 @@ class UniversalMIDISystem:
         """Callback cuando llega MIDI de cualquier controlador"""
         msg, _ = message
         
-        # Program Change detectado
-        if len(msg) >= 2 and 0xC0 <= msg[0] <= 0xCF:
-            preset = msg[1]
-            if 0 <= preset <= 7:
-                print(f"🎛️ Program Change recibido: {preset}")
-                self.change_preset(preset, "Controlador_MIDI")
+        # Detectar canal MIDI
+        if len(msg) >= 1:
+            command = msg[0] & 0xF0  # Comando MIDI
+            channel = msg[0] & 0x0F  # Canal MIDI (0-15)
+            
+            # Program Change detectado
+            if command == 0xC0 and len(msg) >= 2:
+                preset = msg[1]
+                if 0 <= preset <= 7:
+                    print(f"🎛️ Program Change recibido: preset {preset} en canal {channel}")
+                    self.change_preset(preset, f"Controlador_MIDI_Ch{channel}")
+            
+            # Note On detectado - para debug
+            elif command == 0x90 and len(msg) >= 3:
+                note = msg[1]
+                velocity = msg[2]
+                if velocity > 0:  # Note On real (velocity > 0)
+                    print(f"🎹 Nota en canal {channel}: nota {note}, velocity {velocity}")
+            
+            # Otros mensajes MIDI para debug
+            elif command in [0x80, 0xB0, 0xE0]:  # Note Off, Control Change, Pitch Bend
+                print(f"🎛️ MIDI canal {channel}: comando {hex(command)}, data: {msg[1:] if len(msg) > 1 else 'sin data'}")
     
     def change_preset(self, preset_num: int, source: str):
         """FUNCIÓN CENTRAL: Cambiar preset con sincronización total"""
@@ -388,13 +404,22 @@ class UniversalMIDISystem:
             preset_info = self.presets[preset_num]
             print(f"\n🎵 Preset {preset_num}: {preset_info['name']} (desde {source})")
             
-            # 1. Cambiar sonido en FluidSynth
+            # 1. Cambiar sonido en FluidSynth EN TODOS LOS CANALES
             if self.fs and self.sfid is not None:
-                result = self.fs.program_select(0, self.sfid, preset_info['bank'], preset_info['program'])
-                if result != 0:
-                    print(f"❌ Error FluidSynth: {result}")
+                success_count = 0
+                # Aplicar preset a TODOS los 16 canales MIDI (0-15)
+                for channel in range(16):
+                    result = self.fs.program_select(channel, self.sfid, preset_info['bank'], preset_info['program'])
+                    if result == 0:
+                        success_count += 1
+                    else:
+                        print(f"⚠️  Error canal {channel}: {result}")
+                
+                if success_count > 0:
+                    print(f"✅ Sonido aplicado a {success_count}/16 canales: {preset_info['name']}")
+                else:
+                    print(f"❌ Error FluidSynth: No se pudo aplicar a ningún canal")
                     return False
-                print(f"✅ Sonido: {preset_info['name']}")
                 
                 # 🎵 TOCAR NOTA DE DEMOSTRACIÓN EN HILO SEPARADO (NO BLOQUEAR WEB)
                 if self.play_demo:
@@ -444,21 +469,24 @@ class UniversalMIDISystem:
             if not self.fs:
                 return
                 
-            # Tocar acorde corto para demostrar el nuevo sonido
-            notes = [60, 64, 67]  # C-E-G (C major chord)
+            # Tocar en los primeros 4 canales para asegurar que se escuche
+            channels = [0, 1, 2, 3]  # Canales principales
+            notes = [60, 64, 67]     # C-E-G (C major chord)
             
-            # Encender notas
-            for note in notes:
-                self.fs.noteon(0, note, 80)  # Velocity 80
+            # Encender notas en múltiples canales
+            for channel in channels:
+                for note in notes:
+                    self.fs.noteon(channel, note, 80)  # Velocity 80
             
             # Esperar (sin bloquear el hilo principal)
             time.sleep(0.8)
             
-            # Apagar notas
-            for note in notes:
-                self.fs.noteoff(0, note)
+            # Apagar notas en múltiples canales
+            for channel in channels:
+                for note in notes:
+                    self.fs.noteoff(channel, note)
             
-            print(f"🎵 Demostración completada: {preset_name}")
+            print(f"🎵 Demostración completada en canales 0-3: {preset_name}")
             
         except Exception as e:
             print(f"⚠️  Error en demostración: {e}")
