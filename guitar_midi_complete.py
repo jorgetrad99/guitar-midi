@@ -1128,20 +1128,16 @@ ctl.!default {
                     midiin = rtmidi.MidiIn(rtmidi.API_MACOSX_CORE)
                     print(f"   🎵 Usando macOS Core MIDI API")
                 else:
-                    # Linux - intentar diferentes APIs
+                    # Linux/DietPi - estrategia específica para evitar errores de memoria
                     midiin = None
-                    for api_name, api_const in [("JACK", rtmidi.API_UNIX_JACK), ("ALSA", rtmidi.API_LINUX_ALSA)]:
-                        try:
-                            midiin = rtmidi.MidiIn(api_const)
-                            print(f"   🎵 Usando {api_name} MIDI API")
-                            break
-                        except:
-                            continue
                     
-                    if midiin is None:
-                        # Último recurso
-                        midiin = rtmidi.MidiIn()
-                        print(f"   🎵 Usando API MIDI por defecto")
+                    # NO intentar JACK ni ALSA directamente si hay problemas de memoria
+                    # Usar solo aconnect para detección en DietPi
+                    print(f"   🍓 Detectado sistema Linux (probablemente DietPi)")
+                    print(f"   🔄 Usando aconnect para detección MIDI (evitando problemas rtmidi)")
+                    
+                    # Retornar temprano para usar método aconnect
+                    return self._scan_midi_with_aconnect()
                 
                 available_ports = midiin.get_ports()
                 
@@ -1195,6 +1191,113 @@ ctl.!default {
         except Exception as e:
             print(f"⚠️  Error escaneando dispositivos MIDI: {e}")
             return []
+    
+    def _scan_midi_with_aconnect(self) -> List[str]:
+        """Escanear MIDI usando aconnect - ESPECÍFICO PARA DIETPI/RASPBERRY PI"""
+        try:
+            import subprocess
+            
+            print(f"   🍓 Escaneando MIDI con aconnect (método DietPi)")
+            
+            # Usar aconnect directamente
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                print(f"   ❌ aconnect falló: {result.stderr}")
+                return []
+            
+            current_devices = []
+            lines = result.stdout.split('\n')
+            
+            print(f"   🔍 Salida de aconnect:")
+            for line in lines[:10]:  # Solo primeras 10 líneas para debug
+                if line.strip():
+                    print(f"      {line}")
+            
+            for line in lines:
+                line = line.strip()
+                if line.startswith('client ') and ':' in line:
+                    try:
+                        # Buscar patrones conocidos
+                        keywords = ['MPK', 'Pico', 'Captain', 'Fishman', 'TriplePlay', 'UMC', 'Behringer', 'Akai']
+                        if any(keyword.lower() in line.lower() for keyword in keywords):
+                            
+                            # Extraer nombre del dispositivo
+                            if "'" in line:
+                                device_name = line.split("'")[1]
+                            else:
+                                device_name = line.split(':')[1].strip()
+                            
+                            # Limpiar y validar
+                            device_name = device_name.replace("'", "").strip()
+                            
+                            if device_name not in ['System', 'Midi Through', 'Timer', 'Announce']:
+                                current_devices.append(device_name)
+                                print(f"   ✅ Controlador MIDI detectado (aconnect): {device_name}")
+                                
+                                # NO configurar MIDI Output aquí para evitar problemas rtmidi
+                                # Solo detectar por ahora
+                                
+                    except Exception as e:
+                        continue
+            
+            print(f"   📋 Dispositivos encontrados con aconnect: {current_devices}")
+            return current_devices
+            
+        except Exception as e:
+            print(f"   ❌ Error con aconnect: {e}")
+            return []
+    
+    def _send_program_change_dietpi(self, program: int) -> int:
+        """Enviar Program Change usando amidi - ESPECÍFICO PARA DIETPI"""
+        try:
+            import subprocess
+            
+            print(f"   🍓 Enviando PC {program} usando amidi...")
+            sent_count = 0
+            
+            # Obtener puertos MIDI disponibles
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True, timeout=3)
+            if result.returncode != 0:
+                print(f"   ❌ No se puede obtener lista de puertos MIDI")
+                return 0
+            
+            # Buscar puertos de controladores MIDI
+            target_ports = []
+            for line in result.stdout.split('\n'):
+                if 'client' in line and any(keyword in line.lower() for keyword in ['pico', 'captain', 'mpk', 'akai']):
+                    try:
+                        # Extraer número de cliente
+                        client_num = line.split('client ')[1].split(':')[0].strip()
+                        target_ports.append(client_num)
+                        print(f"      🎯 Puerto objetivo encontrado: cliente {client_num}")
+                    except:
+                        continue
+            
+            # Enviar Program Change a cada puerto
+            for port in target_ports:
+                try:
+                    # Crear mensaje Program Change hexadecimal
+                    # 0xC0 = Program Change canal 0, program = número del programa
+                    hex_message = f"C0 {program:02X}"
+                    
+                    # Usar amidi para enviar
+                    cmd = ['amidi', '-p', f'hw:{port}', '-S', hex_message]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+                    
+                    if result.returncode == 0:
+                        print(f"      📤 PC {program} enviado exitosamente a puerto {port}")
+                        sent_count += 1
+                    else:
+                        print(f"      ⚠️  Error enviando a puerto {port}: {result.stderr}")
+                        
+                except Exception as e:
+                    print(f"      ❌ Error enviando a puerto {port}: {e}")
+            
+            return sent_count
+            
+        except Exception as e:
+            print(f"   ❌ Error en envío DietPi: {e}")
+            return 0
     
     def _apply_channel_effect(self, channel: int, effect_name: str, value: int) -> bool:
         """Aplicar efecto específico a un canal MIDI"""
@@ -1340,20 +1443,27 @@ ctl.!default {
                 print(f"   📡 Enviando Program Change {pc_number} a controladores físicos...")
                 sent_count = 0
                 
-                for device_name, midiout in self.midi_outputs.items():
-                    try:
-                        # Program Change: 0xC0 + canal 0, programa
-                        pc_message = [0xC0, pc_number % 8]  # Mapear a rango 0-7
-                        midiout.send_message(pc_message)
-                        print(f"      📤 PC {pc_number % 8} enviado a: {device_name}")
-                        sent_count += 1
-                    except Exception as e:
-                        print(f"      ❌ Error enviando a {device_name}: {e}")
+                # Método 1: rtmidi (Windows/macOS)
+                if self.midi_outputs:
+                    for device_name, midiout in self.midi_outputs.items():
+                        try:
+                            # Program Change: 0xC0 + canal 0, programa
+                            pc_message = [0xC0, pc_number % 8]  # Mapear a rango 0-7
+                            midiout.send_message(pc_message)
+                            print(f"      📤 PC {pc_number % 8} enviado a: {device_name}")
+                            sent_count += 1
+                        except Exception as e:
+                            print(f"      ❌ Error enviando a {device_name}: {e}")
+                
+                # Método 2: aconnect/amidi (DietPi/Linux) - NUEVO MÉTODO
+                else:
+                    print(f"   🍓 Usando método DietPi para enviar Program Change...")
+                    sent_count = self._send_program_change_dietpi(pc_number % 8)
                 
                 if sent_count > 0:
                     print(f"   ✅ Program Change enviado a {sent_count} controladores")
                 else:
-                    print(f"   ⚠️  No se enviaron Program Changes (sin MIDI Outputs)")
+                    print(f"   ⚠️  No se enviaron Program Changes")
                 
                 # Notificar a la web interface si es necesario
                 if self.socketio:
