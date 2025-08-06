@@ -30,6 +30,7 @@ class UniversalMIDISystem:
         # Estado del sistema
         self.current_preset = 0
         self.is_running = False
+        self.play_demo = True  # Tocar demostración al cambiar preset
         
         # 8 Presets universales
         self.presets = {
@@ -295,6 +296,26 @@ class UniversalMIDISystem:
                     print(f"❌ Error FluidSynth: {result}")
                     return False
                 print(f"✅ Sonido: {preset_info['name']}")
+                
+                # 🎵 TOCAR NOTA DE DEMOSTRACIÓN PARA ESCUCHAR EL NUEVO PRESET
+                if self.play_demo:
+                    try:
+                        # Tocar acorde corto para demostrar el nuevo sonido
+                        notes = [60, 64, 67]  # C-E-G (C major chord)
+                        for note in notes:
+                            self.fs.noteon(0, note, 80)  # Velocity 80
+                        
+                        time.sleep(0.8)  # Duración del acorde
+                        
+                        for note in notes:
+                            self.fs.noteoff(0, note)
+                        
+                        print(f"🎵 Demostración tocada: {preset_info['name']}")
+                        
+                    except Exception as e:
+                        print(f"⚠️  Error tocando demostración: {e}")
+                else:
+                    print(f"🔇 Demostración desactivada")
             
             # 2. Enviar Program Change a TODOS los controladores físicos
             sent_count = 0
@@ -448,7 +469,8 @@ class UniversalMIDISystem:
                     </div>
                     <div style="margin-top: 20px; text-align: center;">
                         <button onclick="testAudio()" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px;">🔊 Probar Audio</button>
-                        <button onclick="fixAudio()" style="background: #ffc107; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🔧 Corregir Audio</button>
+                        <button onclick="fixAudio()" style="background: #ffc107; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px;">🔧 Corregir Audio</button>
+                        <button onclick="toggleDemo()" id="demo-btn" style="background: #007acc; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🎵 Demo ON</button>
                     </div>
                 </div>
                 
@@ -498,6 +520,16 @@ class UniversalMIDISystem:
                             }});
                     }}
                     
+                    function toggleDemo() {{
+                        fetch('/api/toggle-demo', {{method: 'POST'}})
+                            .then(r => r.json())
+                            .then(data => {{
+                                const btn = document.getElementById('demo-btn');
+                                btn.textContent = data.demo_enabled ? '🎵 Demo ON' : '🔇 Demo OFF';
+                                btn.style.background = data.demo_enabled ? '#007acc' : '#6c757d';
+                            }});
+                    }}
+                    
                     // Atajos de teclado
                     document.addEventListener('keydown', function(e) {{
                         const key = e.key;
@@ -540,6 +572,17 @@ class UniversalMIDISystem:
         def api_fix_audio():
             self.fix_audio()
             return jsonify({'success': True, 'message': 'Corrección de audio ejecutada'})
+        
+        @self.app.route('/api/toggle-demo', methods=['POST'])
+        def api_toggle_demo():
+            self.play_demo = not self.play_demo
+            status = "activadas" if self.play_demo else "desactivadas"
+            print(f"🎵 Demostraciones {status}")
+            return jsonify({
+                'success': True, 
+                'demo_enabled': self.play_demo,
+                'message': f'Demostraciones {status}'
+            })
 
 if __name__ == "__main__":
     try:
