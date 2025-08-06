@@ -121,6 +121,45 @@ class MIDIInterceptor:
             'preset_volumes': {i: 100 for i in range(8)}
         }
         
+        # Lista completa de instrumentos General MIDI
+        self.general_midi_instruments = {
+            # PIANO
+            0: "Acoustic Grand Piano", 1: "Bright Acoustic Piano", 2: "Electric Grand Piano", 3: "Honky-tonk Piano",
+            4: "Electric Piano 1", 5: "Electric Piano 2", 6: "Harpsichord", 7: "Clavi",
+            # CHROMATIC PERCUSSION
+            8: "Celesta", 9: "Glockenspiel", 10: "Music Box", 11: "Vibraphone", 12: "Marimba", 13: "Xylophone", 14: "Tubular Bells", 15: "Dulcimer",
+            # ORGAN
+            16: "Drawbar Organ", 17: "Percussive Organ", 18: "Rock Organ", 19: "Church Organ", 20: "Reed Organ", 21: "Accordion", 22: "Harmonica", 23: "Tango Accordion",
+            # GUITAR
+            24: "Acoustic Guitar (nylon)", 25: "Acoustic Guitar (steel)", 26: "Electric Guitar (jazz)", 27: "Electric Guitar (clean)",
+            28: "Electric Guitar (muted)", 29: "Overdriven Guitar", 30: "Distortion Guitar", 31: "Guitar harmonics",
+            # BASS
+            32: "Acoustic Bass", 33: "Electric Bass (finger)", 34: "Electric Bass (pick)", 35: "Fretless Bass",
+            36: "Slap Bass 1", 37: "Slap Bass 2", 38: "Synth Bass 1", 39: "Synth Bass 2",
+            # STRINGS
+            40: "Violin", 41: "Viola", 42: "Cello", 43: "Contrabass", 44: "Tremolo Strings", 45: "Pizzicato Strings", 46: "Orchestral Harp", 47: "Timpani",
+            # ENSEMBLE
+            48: "String Ensemble 1", 49: "String Ensemble 2", 50: "SynthStrings 1", 51: "SynthStrings 2", 52: "Choir Aahs", 53: "Voice Oohs", 54: "Synth Voice", 55: "Orchestra Hit",
+            # BRASS
+            56: "Trumpet", 57: "Trombone", 58: "Tuba", 59: "Muted Trumpet", 60: "French Horn", 61: "Brass Section", 62: "SynthBrass 1", 63: "SynthBrass 2",
+            # REED
+            64: "Soprano Sax", 65: "Alto Sax", 66: "Tenor Sax", 67: "Baritone Sax", 68: "Oboe", 69: "English Horn", 70: "Bassoon", 71: "Clarinet",
+            # PIPE
+            72: "Piccolo", 73: "Flute", 74: "Recorder", 75: "Pan Flute", 76: "Blown Bottle", 77: "Shakuhachi", 78: "Whistle", 79: "Ocarina",
+            # SYNTH LEAD
+            80: "Lead 1 (square)", 81: "Lead 2 (sawtooth)", 82: "Lead 3 (calliope)", 83: "Lead 4 (chiff)", 84: "Lead 5 (charang)", 85: "Lead 6 (voice)", 86: "Lead 7 (fifths)", 87: "Lead 8 (bass + lead)",
+            # SYNTH PAD
+            88: "Pad 1 (new age)", 89: "Pad 2 (warm)", 90: "Pad 3 (polysynth)", 91: "Pad 4 (choir)", 92: "Pad 5 (bowed)", 93: "Pad 6 (metallic)", 94: "Pad 7 (halo)", 95: "Pad 8 (sweep)",
+            # SYNTH EFFECTS
+            96: "FX 1 (rain)", 97: "FX 2 (soundtrack)", 98: "FX 3 (crystal)", 99: "FX 4 (atmosphere)", 100: "FX 5 (brightness)", 101: "FX 6 (goblins)", 102: "FX 7 (echoes)", 103: "FX 8 (sci-fi)",
+            # ETHNIC
+            104: "Sitar", 105: "Banjo", 106: "Shamisen", 107: "Koto", 108: "Kalimba", 109: "Bag pipe", 110: "Fiddle", 111: "Shanai",
+            # PERCUSSIVE
+            112: "Tinkle Bell", 113: "Agogo", 114: "Steel Drums", 115: "Woodblock", 116: "Taiko Drum", 117: "Melodic Tom", 118: "Synth Drum", 119: "Reverse Cymbal",
+            # SOUND EFFECTS
+            120: "Guitar Fret Noise", 121: "Breath Noise", 122: "Seashore", 123: "Bird Tweet", 124: "Telephone Ring", 125: "Helicopter", 126: "Applause", 127: "Gunshot"
+        }
+        
         # FluidSynth
         self.fs = None
         self.sfid = None
@@ -532,6 +571,18 @@ class MIDIInterceptor:
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>🎸 Guitar-MIDI Live Performance System</title>
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.4/socket.io.js"></script>
+                <script>
+                    // Fallback si socket.io no carga
+                    if (typeof io === 'undefined') {
+                        console.warn('⚠️ Socket.IO no disponible - usando polling únicamente');
+                        window.io = function() {
+                            return {
+                                emit: function() { console.log('Socket emit (disabled)'); },
+                                on: function() { console.log('Socket on (disabled)'); }
+                            };
+                        };
+                    }
+                </script>
                 <style>
                     * {
                         margin: 0;
@@ -1133,8 +1184,165 @@ class MIDIInterceptor:
                     
                     function toggleEditMode() {
                         editMode = !editMode;
-                        // TODO: Implementar modo de edición
-                        alert('Modo de edición próximamente disponible');
+                        console.log(`✏️ Modo edición: ${editMode ? 'ACTIVADO' : 'DESACTIVADO'}`);
+                        
+                        const button = document.querySelector('button[onclick="toggleEditMode()"]');
+                        const grid = document.getElementById('presets-grid');
+                        
+                        if (editMode) {
+                            button.textContent = '💾 Guardar Cambios';
+                            button.style.background = 'rgba(208, 2, 27, 0.2)';
+                            button.style.borderColor = '#D0021B';
+                            
+                            // Convertir presets a modo edición
+                            showPresetEditor();
+                        } else {
+                            button.textContent = '✏️ Editar Presets';
+                            button.style.background = 'rgba(80, 227, 194, 0.2)';
+                            button.style.borderColor = '#50E3C2';
+                            
+                            // Volver a vista normal
+                            updatePresetsGrid(systemData.presets);
+                        }
+                    }
+                    
+                    async function showPresetEditor() {
+                        console.log('📝 Mostrando editor de presets...');
+                        
+                        // Obtener lista de instrumentos
+                        try {
+                            const response = await fetch('/api/instruments');
+                            const data = await response.json();
+                            const instruments = data.instruments;
+                            
+                            console.log('🎼 Instrumentos cargados:', Object.keys(instruments).length);
+                            
+                            const grid = document.getElementById('presets-grid');
+                            grid.innerHTML = '';
+                            
+                            // Crear editor para cada preset
+                            for (let i = 0; i < 8; i++) {
+                                const preset = systemData.presets[i];
+                                const editorCard = createPresetEditor(i, preset, instruments);
+                                grid.appendChild(editorCard);
+                            }
+                            
+                        } catch (error) {
+                            console.error('❌ Error cargando instrumentos:', error);
+                            alert('Error cargando instrumentos para edición');
+                        }
+                    }
+                    
+                    function createPresetEditor(presetId, preset, instruments) {
+                        const card = document.createElement('div');
+                        card.className = 'preset-card editor-mode';
+                        card.style.padding = '15px';
+                        card.style.height = 'auto';
+                        
+                        // Crear lista de opciones para el select
+                        let instrumentOptions = '';
+                        for (let [program, name] of Object.entries(instruments)) {
+                            const selected = parseInt(program) === preset.program ? 'selected' : '';
+                            instrumentOptions += `<option value="${program}" ${selected}>${program} - ${name}</option>`;
+                        }
+                        
+                        card.innerHTML = `
+                            <div style="text-align: center; margin-bottom: 12px;">
+                                <strong>PRESET ${presetId}</strong>
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; display: block; margin-bottom: 4px;">Nombre:</label>
+                                <input type="text" id="name-${presetId}" value="${preset.name}" 
+                                       style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; font-size: 12px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; display: block; margin-bottom: 4px;">Instrumento:</label>
+                                <select id="instrument-${presetId}" onchange="previewInstrument(${presetId}, this.value)"
+                                        style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; font-size: 11px;">
+                                    ${instrumentOptions}
+                                </select>
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; display: block; margin-bottom: 4px;">Volumen:</label>
+                                <input type="range" id="volume-${presetId}" min="0" max="100" value="${preset.volume}" 
+                                       oninput="document.getElementById('vol-val-${presetId}').textContent = this.value"
+                                       style="width: 100%;">
+                                <div style="text-align: center; font-size: 10px; margin-top: 2px;">
+                                    <span id="vol-val-${presetId}">${preset.volume}</span>%
+                                </div>
+                            </div>
+                            
+                            <button onclick="savePresetChanges(${presetId})" 
+                                    style="width: 100%; padding: 8px; background: rgba(74, 144, 226, 0.3); border: 1px solid #4A90E2; border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">
+                                💾 Aplicar
+                            </button>
+                        `;
+                        
+                        return card;
+                    }
+                    
+                    async function previewInstrument(presetId, program) {
+                        console.log(`🎵 Preview preset ${presetId} con instrumento ${program}`);
+                        try {
+                            // Cambiar temporalmente para preview
+                            const response = await fetch('/api/preview-instrument', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ program: parseInt(program) })
+                            });
+                        } catch (error) {
+                            console.error('❌ Error en preview:', error);
+                        }
+                    }
+                    
+                    async function savePresetChanges(presetId) {
+                        console.log(`💾 Guardando cambios preset ${presetId}...`);
+                        
+                        try {
+                            const name = document.getElementById(`name-${presetId}`).value;
+                            const program = parseInt(document.getElementById(`instrument-${presetId}`).value);
+                            const volume = parseInt(document.getElementById(`volume-${presetId}`).value);
+                            
+                            const updates = {
+                                name: name,
+                                program: program,
+                                volume: volume
+                            };
+                            
+                            console.log(`📝 Actualizaciones:`, updates);
+                            
+                            const response = await fetch(`/api/preset/${presetId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(updates)
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (data.success) {
+                                console.log(`✅ Preset ${presetId} actualizado`);
+                                
+                                // Si es el preset actual, aplicar inmediatamente
+                                if (presetId === currentPreset) {
+                                    await changePreset(presetId);
+                                }
+                                
+                                // Actualizar datos locales
+                                await initSystem();
+                                
+                                alert(`✅ Preset ${presetId} "${name}" actualizado!`);
+                            } else {
+                                console.error(`❌ Error actualizando preset ${presetId}`);
+                                alert(`❌ Error actualizando preset ${presetId}`);
+                            }
+                            
+                        } catch (error) {
+                            console.error('❌ Error guardando preset:', error);
+                            alert('❌ Error guardando cambios');
+                        }
                     }
                     
                     // WebSocket events
@@ -1259,6 +1467,49 @@ class MIDIInterceptor:
             self.detect_controllers()
             self.detect_audio_interfaces()
             return jsonify({'success': True})
+        
+        @self.app.route('/api/instruments', methods=['GET'])
+        def api_get_instruments():
+            return jsonify({
+                'success': True,
+                'instruments': self.general_midi_instruments
+            })
+        
+        @self.app.route('/api/preview-instrument', methods=['POST'])
+        def api_preview_instrument():
+            try:
+                data = request.get_json()
+                program = data.get('program', 0)
+                
+                print(f"🎵 Preview instrumento {program}: {self.general_midi_instruments.get(program, 'Unknown')}")
+                
+                # Aplicar temporalmente para preview
+                if self.fs and self.sfid is not None:
+                    result = self.fs.program_select(0, self.sfid, 0, program)
+                    
+                    if result == 0:
+                        # Tocar nota de preview
+                        def play_preview():
+                            try:
+                                self.fs.noteon(0, 60, 100)
+                                time.sleep(0.2)
+                                self.fs.noteoff(0, 60)
+                            except Exception as e:
+                                print(f"Error en preview: {e}")
+                        
+                        threading.Thread(target=play_preview, daemon=True).start()
+                        
+                        return jsonify({
+                            'success': True,
+                            'program': program,
+                            'instrument_name': self.general_midi_instruments.get(program, 'Unknown')
+                        })
+                
+                return jsonify({'success': False, 'error': 'FluidSynth not available'})
+                
+            except Exception as e:
+                print(f"❌ Error preview instrumento: {e}")
+                return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == "__main__":
     try:
