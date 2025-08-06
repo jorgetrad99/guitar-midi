@@ -1299,6 +1299,52 @@ ctl.!default {
             print(f"   ❌ Error en envío DietPi: {e}")
             return 0
     
+    def _send_program_change_simple(self, program: int) -> int:
+        """FUNCIÓN SIMPLE: Enviar Program Change a TODOS los puertos MIDI disponibles"""
+        try:
+            import rtmidi
+            sent_count = 0
+            
+            print(f"   🎹 Buscando TODOS los puertos MIDI Output...")
+            
+            # Crear MIDI Out y obtener todos los puertos
+            midiout = rtmidi.MidiOut()
+            available_ports = midiout.get_ports()
+            
+            print(f"   🔍 Puertos MIDI Output encontrados: {available_ports}")
+            
+            for i, port_name in enumerate(available_ports):
+                # Filtrar puertos que NO queremos (sistema)
+                skip_ports = ['Microsoft GS', 'MIDI Mapper', 'Timer', 'RtMidiIn']
+                if any(skip in port_name for skip in skip_ports):
+                    print(f"      ⏭️  Saltando puerto del sistema: {port_name}")
+                    continue
+                
+                try:
+                    # Crear nueva instancia para cada puerto
+                    port_out = rtmidi.MidiOut()
+                    port_out.open_port(i)
+                    
+                    # Enviar Program Change (0xC0 = canal 0, program)
+                    pc_message = [0xC0, program]
+                    port_out.send_message(pc_message)
+                    
+                    print(f"      📤 PC {program} enviado a: {port_name}")
+                    sent_count += 1
+                    
+                    # Cerrar puerto
+                    port_out.close_port()
+                    
+                except Exception as e:
+                    print(f"      ❌ Error enviando a {port_name}: {e}")
+            
+            midiout.close_port()
+            return sent_count
+            
+        except Exception as e:
+            print(f"   ❌ Error en envío simple: {e}")
+            return 0
+    
     def _apply_channel_effect(self, channel: int, effect_name: str, value: int) -> bool:
         """Aplicar efecto específico a un canal MIDI"""
         try:
@@ -1439,31 +1485,14 @@ ctl.!default {
             if success:
                 print(f"   ✅ Preset {pc_number} activado desde {source}")
                 
-                # 🚀 ENVIAR PROGRAM CHANGE A TODOS LOS CONTROLADORES FÍSICOS
-                print(f"   📡 Enviando Program Change {pc_number} a controladores físicos...")
-                sent_count = 0
-                
-                # Método 1: rtmidi (Windows/macOS)
-                if self.midi_outputs:
-                    for device_name, midiout in self.midi_outputs.items():
-                        try:
-                            # Program Change: 0xC0 + canal 0, programa
-                            pc_message = [0xC0, pc_number % 8]  # Mapear a rango 0-7
-                            midiout.send_message(pc_message)
-                            print(f"      📤 PC {pc_number % 8} enviado a: {device_name}")
-                            sent_count += 1
-                        except Exception as e:
-                            print(f"      ❌ Error enviando a {device_name}: {e}")
-                
-                # Método 2: aconnect/amidi (DietPi/Linux) - NUEVO MÉTODO
-                else:
-                    print(f"   🍓 Usando método DietPi para enviar Program Change...")
-                    sent_count = self._send_program_change_dietpi(pc_number % 8)
+                # 🚀 SIMPLE: ENVIAR PROGRAM CHANGE A TODOS LOS PUERTOS MIDI
+                print(f"   📡 Enviando Program Change {pc_number} a TODOS los puertos MIDI...")
+                sent_count = self._send_program_change_simple(pc_number % 8)
                 
                 if sent_count > 0:
-                    print(f"   ✅ Program Change enviado a {sent_count} controladores")
+                    print(f"   ✅ Program Change enviado a {sent_count} puertos")
                 else:
-                    print(f"   ⚠️  No se enviaron Program Changes")
+                    print(f"   ⚠️  No se enviaron Program Changes - configurando outputs...")
                 
                 # Notificar a la web interface si es necesario
                 if self.socketio:
