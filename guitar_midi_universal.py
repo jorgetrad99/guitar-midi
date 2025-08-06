@@ -79,6 +79,9 @@ class UniversalMIDISystem:
             # 5. Preset inicial
             self.change_preset(0, "Sistema")
             
+            # 6. Prueba de audio
+            self.test_audio()
+            
             print("\n✅ Sistema iniciado correctamente")
             print("🌐 Web: http://localhost:5000")
             print("🎹 Controladores conectados y sincronizados")
@@ -323,6 +326,72 @@ class UniversalMIDISystem:
             print(f"❌ Error cambiando preset: {e}")
             return False
     
+    def test_audio(self):
+        """Probar que FluidSynth esté enviando audio correctamente"""
+        try:
+            print("\n🔊 Probando audio FluidSynth...")
+            
+            # Tocar nota de prueba
+            self.fs.noteon(0, 60, 100)  # C4, velocity 100
+            time.sleep(0.5)
+            self.fs.noteoff(0, 60)
+            
+            print("🎵 Nota de prueba enviada - ¿Se escuchó?")
+            
+            # Verificar configuración de audio
+            try:
+                import subprocess
+                
+                # Verificar volumen ALSA
+                result = subprocess.run(['amixer', 'get', 'Master'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    print("🔊 Estado de volumen ALSA:")
+                    for line in result.stdout.split('\n'):
+                        if '[' in line and '%' in line:
+                            print(f"   {line.strip()}")
+                
+                # Verificar dispositivos de audio
+                result = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    print("🎧 Dispositivos de audio disponibles:")
+                    for line in result.stdout.split('\n')[:5]:  # Primeras 5 líneas
+                        if line.strip():
+                            print(f"   {line.strip()}")
+                            
+            except:
+                pass
+                
+        except Exception as e:
+            print(f"❌ Error probando audio: {e}")
+    
+    def fix_audio(self):
+        """Intentar corregir problemas de audio"""
+        try:
+            print("🔧 Intentando corregir audio...")
+            
+            import subprocess
+            
+            # Comandos para configurar volumen
+            commands = [
+                ['amixer', 'set', 'Master', '100%'],
+                ['amixer', 'set', 'Master', 'unmute'],
+                ['amixer', 'set', 'PCM', '100%'],
+                ['amixer', 'set', 'Headphone', '100%']
+            ]
+            
+            for cmd in commands:
+                try:
+                    subprocess.run(cmd, capture_output=True)
+                    print(f"✅ Ejecutado: {' '.join(cmd)}")
+                except:
+                    pass
+            
+            print("🔊 Audio configurado - prueba de nuevo")
+            self.test_audio()
+            
+        except Exception as e:
+            print(f"❌ Error corrigiendo audio: {e}")
+    
     def setup_routes(self):
         """Configurar rutas web"""
         
@@ -377,6 +446,10 @@ class UniversalMIDISystem:
                     <div class="controller-list">
                         {" ".join([f'<div class="controller">{ctrl["name"]}</div>' for ctrl in self.connected_controllers])}
                     </div>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button onclick="testAudio()" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px;">🔊 Probar Audio</button>
+                        <button onclick="fixAudio()" style="background: #ffc107; color: black; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">🔧 Corregir Audio</button>
+                    </div>
                 </div>
                 
                 <script>
@@ -407,6 +480,23 @@ class UniversalMIDISystem:
                     socket.on('preset_changed', function(data) {{
                         updateUI(data.preset, data.name);
                     }});
+                    
+                    // Funciones de audio
+                    function testAudio() {{
+                        fetch('/api/test-audio', {{method: 'POST'}})
+                            .then(r => r.json())
+                            .then(data => {{
+                                alert('Prueba de audio ejecutada - revisa la consola del servidor');
+                            }});
+                    }}
+                    
+                    function fixAudio() {{
+                        fetch('/api/fix-audio', {{method: 'POST'}})
+                            .then(r => r.json())
+                            .then(data => {{
+                                alert('Corrección de audio ejecutada - revisa la consola del servidor');
+                            }});
+                    }}
                     
                     // Atajos de teclado
                     document.addEventListener('keydown', function(e) {{
@@ -440,6 +530,16 @@ class UniversalMIDISystem:
                 'controllers': len(self.connected_controllers),
                 'presets': self.presets
             })
+        
+        @self.app.route('/api/test-audio', methods=['POST'])
+        def api_test_audio():
+            self.test_audio()
+            return jsonify({'success': True, 'message': 'Prueba de audio ejecutada'})
+        
+        @self.app.route('/api/fix-audio', methods=['POST'])  
+        def api_fix_audio():
+            self.fix_audio()
+            return jsonify({'success': True, 'message': 'Corrección de audio ejecutada'})
 
 if __name__ == "__main__":
     try:
