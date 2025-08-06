@@ -154,7 +154,7 @@ class UniversalMIDISystem:
                             
                             # Detectar si es controlador físico (tiene puertos de entrada)
                             if any(keyword in device_name.lower() for keyword in 
-                                  ['pico', 'captain', 'mpk', 'akai', 'mvave', 'pocket', 'midi', 'keyboard']):
+                                  ['pico', 'captain', 'mpk', 'akai', 'mvave', 'pocket', 'midi', 'keyboard', 'sinco', 'usb device']):
                                 
                                 controller = {
                                     'client': client_num,
@@ -183,7 +183,7 @@ class UniversalMIDISystem:
             fluidsynth_client = None
             
             for line in result.stdout.split('\n'):
-                if 'FLUID' in line and 'Synth input' in line:
+                if 'FLUID Synth' in line and 'client' in line:
                     try:
                         fluidsynth_client = line.split('client ')[1].split(':')[0]
                         print(f"🎹 FluidSynth encontrado: cliente {fluidsynth_client}")
@@ -282,7 +282,7 @@ class UniversalMIDISystem:
             for i, line in enumerate(lines):
                 # Buscar controladores conocidos
                 if 'client' in line and any(keyword in line.lower() for keyword in 
-                                          ['pico', 'captain', 'mpk', 'akai', 'mvave']):
+                                          ['pico', 'captain', 'mpk', 'akai', 'mvave', 'sinco', 'usb device']):
                     try:
                         client_num = line.split('client ')[1].split(':')[0]
                         device_name = line.split("'")[1] if "'" in line else line.split(':')[1].strip()
@@ -327,7 +327,7 @@ class UniversalMIDISystem:
             for i, port in enumerate(in_ports):
                 # Conectar a controladores conocidos
                 if any(keyword in port.lower() for keyword in 
-                      ['pico', 'captain', 'mpk', 'akai', 'mvave', 'pocket']):
+                      ['pico', 'captain', 'mpk', 'akai', 'mvave', 'pocket', 'sinco', 'usb device']):
                     try:
                         input_instance = rtmidi.MidiIn()
                         input_instance.open_port(i)
@@ -347,7 +347,7 @@ class UniversalMIDISystem:
             for i, port in enumerate(out_ports):
                 # Conectar a controladores físicos (no FluidSynth)
                 if (any(keyword in port.lower() for keyword in 
-                       ['pico', 'captain', 'mpk', 'akai', 'mvave', 'pocket']) and
+                       ['pico', 'captain', 'mpk', 'akai', 'mvave', 'pocket', 'sinco', 'usb device']) and
                     'fluid' not in port.lower()):
                     try:
                         output_instance = rtmidi.MidiOut()
