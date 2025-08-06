@@ -46,10 +46,11 @@ class GuitarMIDIComplete:
         self.is_running = False
         self.current_instrument = 0
         
-        # Sistema modular (NUEVO)
+        # Sistema modular (NUEVO) + INTERCEPTOR
         self.modular_system = None
         self.device_manager = None
         self.active_controllers = {}
+        self.midi_inputs = []  # Para interceptar MIDI
         
         # Base de datos SQLite integrada
         self.db_path = "guitar_midi.db"
@@ -1045,6 +1046,134 @@ ctl.!default {
         except Exception as e:
             print(f"❌ Error configurando presets de {controller_type}: {e}")
     
+    def _disconnect_controllers_from_fluidsynth(self):
+        """🔌 Desconectar controladores de FluidSynth para poder interceptar"""
+        try:
+            print("🔌 Desconectando controladores de FluidSynth para interceptar...")
+            
+            result = subprocess.run(['aconnect', '-l'], capture_output=True, text=True)
+            if result.returncode != 0:
+                return
+            
+            # Encontrar controladores y FluidSynth
+            controllers = []
+            fluidsynth_client = None
+            
+            for line in result.stdout.split('\n'):
+                if 'client' in line:
+                    if any(keyword in line.lower() for keyword in ['sinco', 'usb device', 'mpk', 'akai', 'mvave', 'captain', 'pico']):
+                        try:
+                            client_num = line.split('client ')[1].split(':')[0]
+                            device_name = line.split("'")[1] if "'" in line else line.split(':')[1].strip()
+                            controllers.append((client_num, device_name))
+                        except:
+                            pass
+                    elif 'FLUID Synth' in line:
+                        try:
+                            fluidsynth_client = line.split('client ')[1].split(':')[0]
+                        except:
+                            pass
+            
+            # Desconectar cada controlador de FluidSynth
+            if fluidsynth_client:
+                for controller_client, controller_name in controllers:
+                    try:
+                        cmd = ['aconnect', '-d', f'{controller_client}:0', f'{fluidsynth_client}:0']
+                        subprocess.run(cmd, capture_output=True)
+                        print(f"   🔌 Desconectado: {controller_name}")
+                    except:
+                        pass
+            
+        except Exception as e:
+            print(f"❌ Error desconectando controladores: {e}")
+    
+    def _init_midi_interceptor(self):
+        """🎛️ Inicializar interceptor MIDI - LA MAGIA QUE FUNCIONA"""
+        try:
+            print("🎛️ Inicializando interceptor MIDI...")
+            
+            midi_in = rtmidi.MidiIn()
+            ports = midi_in.get_ports()
+            
+            # Conectar a todos los controladores conocidos
+            connected = 0
+            for i, port in enumerate(ports):
+                if any(keyword in port.lower() for keyword in 
+                      ['sinco', 'usb device', 'mpk', 'akai', 'mvave', 'captain', 'pico']):
+                    try:
+                        input_instance = rtmidi.MidiIn()
+                        input_instance.open_port(i)
+                        input_instance.set_callback(self._intercept_midi)
+                        self.midi_inputs.append({
+                            'name': port,
+                            'instance': input_instance
+                        })
+                        print(f"   🔌 Interceptando: {port}")
+                        connected += 1
+                    except Exception as e:
+                        print(f"   ❌ Error con {port}: {e}")
+            
+            midi_in.close_port()
+            print(f"   ✅ {connected} controladores interceptados")
+            
+            return connected > 0
+            
+        except Exception as e:
+            print(f"❌ Error inicializando interceptor MIDI: {e}")
+            return False
+    
+    def _intercept_midi(self, message, data):
+        """🎵 INTERCEPTAR Y REENVIAR - AQUÍ ESTÁ LA MAGIA QUE FUNCIONA"""
+        try:
+            msg, _ = message
+            
+            if len(msg) >= 1:
+                command = msg[0] & 0xF0
+                channel = msg[0] & 0x0F
+                
+                # INTERCEPTAR NOTAS (Note On/Off)
+                if command == 0x90 and len(msg) >= 3:  # Note On
+                    note = msg[1]
+                    velocity = msg[2]
+                    
+                    if velocity > 0:  # Note On real
+                        # REENVIAR A FLUIDSYNTH CON INSTRUMENTO CORRECTO
+                        if self.fs:
+                            self.fs.noteon(0, note, velocity)  # Siempre canal 0 con preset correcto
+                    else:  # Note Off (velocity 0)
+                        if self.fs:
+                            self.fs.noteoff(0, note)
+                
+                elif command == 0x80 and len(msg) >= 2:  # Note Off explícito
+                    note = msg[1]
+                    if self.fs:
+                        self.fs.noteoff(0, note)
+                
+                # INTERCEPTAR PROGRAM CHANGE DEL CONTROLADOR
+                elif command == 0xC0 and len(msg) >= 2:
+                    preset = msg[1]
+                    if 0 <= preset < len(self.all_instruments):
+                        print(f"🎛️ Program Change interceptado: {preset}")
+                        # Cambiar instrumento directamente en FluidSynth
+                        if self.fs and self.sfid is not None:
+                            instrument_info = self.all_instruments[preset]
+                            result = self.fs.program_select(0, self.sfid, instrument_info['bank'], instrument_info['program'])
+                            if result == 0:
+                                self.current_instrument = preset
+                                print(f"   ✅ Cambiado a: {instrument_info['name']}")
+                                # Notificar a la web interface
+                                if hasattr(self, 'socketio'):
+                                    self.socketio.emit('instrument_changed', {
+                                        'instrument': preset,
+                                        'name': instrument_info['name'],
+                                        'source': 'controller'
+                                    })
+                            else:
+                                print(f"   ❌ Error FluidSynth: {result}")
+        
+        except Exception as e:
+            print(f"⚠️ Error interceptando MIDI: {e}")
+    
     def get_connected_controllers(self) -> Dict[str, Any]:
         """Obtener información de controladores conectados EN TIEMPO REAL"""
         try:
@@ -1475,12 +1604,24 @@ ctl.!default {
             print(f"⚠️  Error desconectando MIDI: {e}")
     
     def _change_preset_universal(self, pc_number: int, source: str = "unknown") -> bool:
-        """🎯 FUNCIÓN UNIVERSAL - TODO CAMBIO DE PRESET PASA POR AQUÍ (MIDI Captain + Web)"""
+        """🎯 FUNCIÓN UNIVERSAL - TODO CAMBIO DE PRESET PASA POR AQUÍ (INTERCEPTOR FUNCIONA)"""
         try:
             print(f"🎹 CAMBIO UNIVERSAL DE PRESET {pc_number} (fuente: {source})")
             
-            # Cambiar el instrumento (mismo código que funciona en MIDI Captain)
-            success = self._set_instrument(pc_number)
+            # 🎵 USAR EL MISMO MÉTODO QUE EL INTERCEPTOR - GARANTIZADO FUNCIONA
+            success = False
+            if pc_number in self.all_instruments:
+                instrument_info = self.all_instruments[pc_number]
+                if self.fs and self.sfid is not None:
+                    result = self.fs.program_select(0, self.sfid, instrument_info['bank'], instrument_info['program'])
+                    if result == 0:
+                        self.current_instrument = pc_number
+                        success = True
+                        print(f"   ✅ FluidSynth cambiado a: {instrument_info['name']}")
+                    else:
+                        print(f"   ❌ Error FluidSynth: {result}")
+            else:
+                print(f"   ❌ Instrumento {pc_number} no existe")
             
             if success:
                 print(f"   ✅ Preset {pc_number} activado desde {source}")
@@ -2267,10 +2408,13 @@ ctl.!default {
                 print("❌ Error crítico: FluidSynth no pudo inicializarse")
                 return False
             
-            # 4. Inicializar MIDI (opcional)
-            self._init_midi_input()
+            # 4. Desconectar controladores de FluidSynth (para interceptar)
+            self._disconnect_controllers_from_fluidsynth()
             
-            # 5. Inicializar servidor web
+            # 5. Inicializar MIDI INTERCEPTOR (reemplaza el antiguo)
+            self._init_midi_interceptor()
+            
+            # 6. Inicializar servidor web
             self._init_web_server()
             
             # 6. Inicializar sistema modular (NUEVO)
