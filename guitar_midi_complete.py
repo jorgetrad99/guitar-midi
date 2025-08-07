@@ -2427,7 +2427,10 @@ ctl.!default {
             # 7.5. Iniciar monitoreo automático de dispositivos MIDI (NUEVO)
             self.start_device_monitoring()
             
-            # 8. Mostrar información del sistema
+            # 8. Debug estado de la base de datos
+            self._debug_database_status()
+            
+            # 9. Mostrar información del sistema
             self._show_system_info()
             
             # 9. Ejecutar servidor (bloqueante)
@@ -2445,6 +2448,11 @@ ctl.!default {
     def stop(self):
         """Detener sistema completo"""
         self.is_running = False
+        
+        # 💾 Guardar presets antes de cerrar
+        print("💾 Guardando configuración...")
+        self._save_all_presets_to_db()
+        self._save_config()
         
         # Detener monitoreo de dispositivos
         self.stop_device_monitoring()
